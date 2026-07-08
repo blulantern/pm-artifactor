@@ -20,8 +20,10 @@ test("sums allocation across sources and flags >100% (the Sam case)", () => {
 
 test("result is ordered by personId, not by load (no leaderboard)", () => {
   const { result } = computeLoads([
-    { personId: "b", pct: 50, source: "Jira" },
-    { personId: "a", pct: 99, source: "Jira" },
+    { personId: "b", pct: 99, source: "Jira" },
+    { personId: "a", pct: 50, source: "Jira" },
   ], now);
+  // a has the LOWER load but the LOWER id — must come first by id.
+  // A load-descending sort would wrongly put b (99) first.
   expect(result.map((r) => r.personId)).toEqual(["a", "b"]);
 });
