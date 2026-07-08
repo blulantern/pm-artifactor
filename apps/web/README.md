@@ -15,7 +15,12 @@ pnpm --filter @pma/db prisma:generate
 DATABASE_URL="file:./.vault/workspace.db" pnpm --filter @pma/db exec prisma db push --skip-generate
 DATABASE_URL="file:./.vault/workspace.db" pnpm --filter @pma/web run seed
 
-# 3. Dev server → http://localhost:3000
+# 3. Warm the intelligence layer (persists the FeatureRecord corpus and runs
+#    the AI tasks through the resolution ladder so the System Intelligence page
+#    shows a real tier distribution + tokens-saved instead of a projected state)
+DATABASE_URL="file:./.vault/workspace.db" pnpm --filter @pma/web run warm
+
+# 4. Dev server → http://localhost:3000
 DATABASE_URL="file:./.vault/workspace.db" pnpm --filter @pma/web dev
 ```
 
@@ -52,4 +57,5 @@ DATABASE_URL="file:./.vault/workspace.db" pnpm --filter @pma/web exec next start
 - **Server-only DB access:** `@pma/db` is imported only under `src/server/**`. Never import it into a client component.
 - **Deterministic engine:** every page's data comes from `@pma/core` analyzers (WSJF/RICE, health composites, cross-tool capacity, sprint/flow, DORA, the Specification rules → daily brief) run server-side over the SQLite vault.
 - **Read-only:** the app never writes to an external system; the note modal is a presentational draft affordance.
-- **AI layer:** the System Intelligence page shows a "projected / no live AI calls yet" state — the stub AIPort + resolution ladder land in Phase 4.
+- **AI layer:** a stub template `AIPort` produces grounded, contract-valid drafts; a resolution-ladder Proxy (deterministic → exact-cache → stub-LLM) logs `AiTask`/`AiResultCache` with `grounded_on` dependency fingerprints. After `warm`, the System Intelligence page shows a real tier distribution + tokens-saved. The real Claude adapter drops in behind the same `AIPort` later.
+- **Read-only ingestion:** a fake work-tracker adapter demonstrates the pull → `IngestionSnapshot` (provenance) → normalized canonical `WorkItem` + `ExternalLink` path — nothing writes back to any source.
