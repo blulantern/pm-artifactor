@@ -10,7 +10,7 @@ test("portfolio view surfaces Sam's cross-tool overallocation", async () => {
     await seedMethodologies(prisma);
     await seedPoc(prisma);
     const vm = await buildPortfolioView(prisma);
-    const sam = vm.loads.find((l) => l.personId === "Sam Rivera")!;
+    const sam = vm.loads.find((l) => l.name === "Sam Rivera")!;
     expect(sam.totalPct).toBe(122);
     expect(sam.overallocated).toBe(true);
     expect(vm.programs).toHaveLength(2);

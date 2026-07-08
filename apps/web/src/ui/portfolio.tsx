@@ -86,7 +86,7 @@ export function Portfolio({ view }: { view: PortfolioViewModel }) {
             {view.loads.map((l) => (
               <div key={l.personId}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span>{l.personId.split(" ")[0]}</span>
+                  <span>{l.name.split(" ")[0]}</span>
                   <span className="mono" style={{ color: l.overallocated ? "var(--flag)" : "var(--ink)" }}>
                     {l.totalPct}%
                   </span>

@@ -28,10 +28,13 @@ const DEFAULT_ONE_ON_ONE_CADENCE_DAYS = 14;
 export async function buildPortfolioView(prisma: PrismaClient) {
   const portfolio = await prisma.portfolio.findFirst({ include: { programs: true } });
   const allocations = await prisma.allocation.findMany({ include: { person: true } });
+  // Key capacity loads by the stable person id, not the display name — two people can share
+  // a name, and the name is presentation, not identity. Keep a name lookup for display.
+  const nameById = new Map(allocations.map((a) => [a.person.id, a.person.name]));
   const loads = computeLoads(
-    allocations.map((a) => ({ personId: a.person.name, pct: a.pct, source: a.sourceLabel ?? "?" })),
+    allocations.map((a) => ({ personId: a.person.id, pct: a.pct, source: a.sourceLabel ?? "?" })),
     NOW(),
-  ).result;
+  ).result.map((l) => ({ ...l, name: nameById.get(l.personId) ?? l.personId }));
   const objectives = await prisma.strategicObjective.findMany();
   return {
     name: portfolio?.name ?? "Portfolio",
@@ -172,7 +175,7 @@ export const getProjectView = (id: string) => buildProjectView(db(), id);
 
 export async function buildProgramsView(prisma: PrismaClient) {
   const programs = await prisma.program.findMany({
-    include: { projects: true, benefits: true, portfolio: true },
+    include: { projects: { select: { id: true, name: true, health: true } }, benefits: true, portfolio: true },
     orderBy: { name: "asc" },
   });
   return programs.map((p) => ({
@@ -181,7 +184,12 @@ export async function buildProgramsView(prisma: PrismaClient) {
     portfolio: p.portfolio.name,
     status: p.status,
     methodology: p.methodology ?? "",
-    health: p.benefitPct ?? 0,
+    // Program health rolls up from its projects — distinct from benefitPct, which is the
+    // program's own benefit-realization metric. Previously both fields read from benefitPct,
+    // making the Programs page render identical numbers.
+    health: p.projects.length
+      ? Math.round(p.projects.reduce((s, proj) => s + proj.health, 0) / p.projects.length)
+      : 0,
     benefitPct: p.benefitPct ?? 0,
     targetEnd: p.targetEnd,
     projectCount: p.projects.length,

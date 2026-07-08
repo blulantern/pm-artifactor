@@ -71,7 +71,7 @@ export async function warmIntelligence(prisma: PrismaClient): Promise<WarmIntell
   if (allocations.length > 0) {
     allFeatures.push(
       ...computeLoads(
-        allocations.map((a) => ({ personId: a.person.name, pct: a.pct, source: a.sourceLabel ?? "?" })),
+        allocations.map((a) => ({ personId: a.person.id, pct: a.pct, source: a.sourceLabel ?? "?" })),
         now,
       ).features,
     );
