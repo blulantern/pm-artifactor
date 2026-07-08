@@ -11,3 +11,7 @@ export * from "./domain/metrics/velocity-metrics.js";
 export * from "./domain/metrics/earned-value-metrics.js";
 export * from "./domain/scheduling/scheduling-strategy.js";
 export * from "./domain/workflow/workflow-engine.js";
+export * from "./domain/methodology/methodology-profile.js";
+export * from "./domain/methodology/scrum-profile.js";
+export * from "./domain/methodology/waterfall-profile.js";
+export * from "./domain/methodology/methodology-registry.js";
