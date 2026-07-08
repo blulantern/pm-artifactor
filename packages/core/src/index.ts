@@ -1,3 +1,5 @@
 export const CORE_VERSION = "0.0.0";
 export * from "./domain/shared/ids.js";
 export * from "./domain/shared/enums.js";
+export * from "./domain/events/domain-event.js";
+export * from "./domain/events/work-item-events.js";
