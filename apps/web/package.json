@@ -10,6 +10,7 @@
     "seed": "pnpm --filter @pma/db seed"
   },
   "dependencies": {
+    "@pma/contracts": "workspace:*",
     "@pma/core": "workspace:*",
     "@pma/db": "workspace:*",
     "@prisma/client": "^5.22.0",
