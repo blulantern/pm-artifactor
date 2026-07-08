@@ -42,7 +42,7 @@ export const TrainingExample = z.object({
   served_output: z.record(z.string(), z.unknown()).nullable().optional(),
   served_by: z.enum(["deterministic", "llm", "learned_model"]).nullable().optional(),
   label: z.object({
-    verdict: z.enum(["accept", "edit", "dismiss"]),
+    verdict: z.enum(["accept", "edit", "dismiss"]).optional(),
     corrected_output: z.record(z.string(), z.unknown()).nullable().optional(),
   }).nullable().optional(),
   outcome_ref: EntityRef.optional(),
