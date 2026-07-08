@@ -20,6 +20,8 @@ export * from "./domain/intelligence/health.js";
 export * from "./domain/intelligence/capacity.js";
 export * from "./domain/intelligence/sprint.js";
 export * from "./domain/intelligence/dora.js";
+export * from "./domain/intelligence/suggested-action.js";
+export * from "./domain/intelligence/specification-rules.js";
 export * from "./domain/prioritization/prioritization-strategy.js";
 export * from "./domain/prioritization/wsjf-strategy.js";
 export * from "./domain/prioritization/rice-strategy.js";
