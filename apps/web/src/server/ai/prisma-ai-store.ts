@@ -6,11 +6,11 @@ export class PrismaAICacheStore implements AICacheStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   async get(keyHash: string): Promise<CachedEntry | null> {
-    const row = await this.prisma.aiResultCache.findUnique({ where: { keyHash } });
+    const row = await this.prisma.aiResultCache.findUnique({ where: { keyHash }, include: { deps: true } });
     if (!row) return null;
     return {
       keyHash: row.keyHash, taskType: row.taskType, output: JSON.parse(row.output),
-      groundedOn: [], tokensUsed: row.tokensUsed, hitCount: row.hitCount, stale: row.stale,
+      groundedOn: row.deps.map((d) => d.entityId), tokensUsed: row.tokensUsed, hitCount: row.hitCount, stale: row.stale,
     };
   }
 
@@ -23,7 +23,10 @@ export class PrismaAICacheStore implements AICacheStore {
         tokensUsed: entry.tokensUsed, tokensSaved: 0, hitCount: 0, stale: false,
         deps: { create: entry.groundedOn.map((id) => ({ entityType: "unknown", entityId: id })) },
       },
-      update: { output: JSON.stringify(entry.output), stale: false },
+      update: {
+        output: JSON.stringify(entry.output), tokensUsed: entry.tokensUsed, stale: false, hitCount: 0,
+        deps: { deleteMany: {}, create: entry.groundedOn.map((id) => ({ entityType: "unknown", entityId: id })) },
+      },
     });
   }
 

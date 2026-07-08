@@ -17,6 +17,31 @@ test("prisma cache store persists, hits, and invalidates by entity", async () =>
   } finally { await cleanup(); }
 }, 30000);
 
+test("get hydrates groundedOn from the AiCacheDep rows", async () => {
+  const { prisma, cleanup } = await makeTestDb();
+  try {
+    const store = new PrismaAICacheStore(prisma);
+    await store.put({ keyHash: "k1", taskType: "health.explain", output: { s: 1 }, groundedOn: ["checkout", "ledger"], tokensUsed: 50, hitCount: 0, stale: false });
+    const got = await store.get("k1");
+    expect([...(got?.groundedOn ?? [])].sort()).toEqual(["checkout", "ledger"]);
+  } finally { await cleanup(); }
+}, 30000);
+
+test("re-put with the same key refreshes tokensUsed and replaces deps", async () => {
+  const { prisma, cleanup } = await makeTestDb();
+  try {
+    const store = new PrismaAICacheStore(prisma);
+    await store.put({ keyHash: "k1", taskType: "health.explain", output: { s: 1 }, groundedOn: ["checkout", "ledger"], tokensUsed: 50, hitCount: 0, stale: false });
+    await store.markStaleByEntity("ledger");
+    await store.put({ keyHash: "k1", taskType: "health.explain", output: { s: 2 }, groundedOn: ["billing"], tokensUsed: 80, hitCount: 0, stale: false });
+    const got = await store.get("k1");
+    expect(got?.tokensUsed).toBe(80);
+    expect(got?.stale).toBe(false);
+    expect(got?.groundedOn).toEqual(["billing"]);
+    expect(await prisma.aiCacheDep.count()).toBe(1);
+  } finally { await cleanup(); }
+}, 30000);
+
 test("logAiTask writes an AiTask row with the resolution tier", async () => {
   const { prisma, cleanup } = await makeTestDb();
   try {
