@@ -17,6 +17,7 @@ export * from "./domain/methodology/waterfall-profile.js";
 export * from "./domain/methodology/methodology-registry.js";
 export * from "./domain/intelligence/feature-record.js";
 export * from "./domain/intelligence/health.js";
+export * from "./domain/intelligence/capacity.js";
 export * from "./domain/prioritization/prioritization-strategy.js";
 export * from "./domain/prioritization/wsjf-strategy.js";
 export * from "./domain/prioritization/rice-strategy.js";
