@@ -30,20 +30,24 @@ function Strengths({ view }: { view: PersonViewModel }) {
 }
 
 function GrowthArea({ view }: { view: PersonViewModel }) {
-  const growth = view.notes.find((n) => n.category === "growth");
+  const growthNotes = view.notes.filter((n) => n.category === "growth");
   return (
     <Panel title="Growth area" sub="support, not a verdict">
-      {growth ? (
-        <div style={{ background: "var(--bg)", borderRadius: 9, padding: 11 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>{growth.content}</div>
-          {growth.howToSupport ? (
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              <b style={{ color: "var(--teal)" }}>How I support:</b> {growth.howToSupport}
-            </div>
-          ) : null}
-        </div>
-      ) : (
+      {growthNotes.length === 0 ? (
         <div className="sub">No growth area on record.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {growthNotes.map((growth) => (
+            <div key={growth.id} style={{ background: "var(--bg)", borderRadius: 9, padding: 11 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{growth.content}</div>
+              {growth.howToSupport ? (
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+                  <b style={{ color: "var(--teal)" }}>How I support:</b> {growth.howToSupport}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
       )}
     </Panel>
   );
