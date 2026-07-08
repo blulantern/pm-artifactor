@@ -119,10 +119,10 @@ export function getPrisma(url?: string): PrismaClient {
 export { getPrisma } from "./client.js";
 ```
 
-- [ ] **Step 8: Install and generate**
+- [ ] **Step 8: Install and validate the schema**
 
-Run: `pnpm install && pnpm --filter @pma/db prisma:generate`
-Expected: Prisma Client generated successfully (no models yet — generates an empty client).
+Run: `pnpm install && pnpm --filter @pma/db exec prisma validate`
+Expected: "The schema is valid 🚀". (Note: `prisma generate` intentionally refuses to emit a client while the schema has zero models — client generation is verified in Task 2 once the first model exists. Do NOT add a placeholder model here.)
 
 - [ ] **Step 9: Commit**
 
