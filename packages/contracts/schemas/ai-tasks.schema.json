@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppm.local/contracts/ai-tasks.schema.json",
+  "title": "PPM AI Task Contracts",
+  "description": "Typed input/output for each AI task. Inputs carry the real entity IDs the model may reason over; outputs carry a grounded_on list of the IDs actually used. The AI transforms grounded data; it never invents facts.",
+  "$defs": {
+    "GroundedNumber": {
+      "type": "object",
+      "description": "A number an AI task emits, tagged with where it came from. Never a bare fact.",
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "number" },
+        "source": { "type": "string", "enum": ["derived", "suggested"], "description": "'derived' = computed from a named input field; 'suggested' = a proposal a human confirms." },
+        "from_field": { "type": ["string", "null"], "description": "The input field this value was derived from, when source=derived." }
+      }
+    },
+    "EntityId": { "type": "string", "description": "A canonical entity id referenced by the task." },
+    "OutputBase": {
+      "type": "object",
+      "description": "Fields every task output must include.",
+      "required": ["grounded_on", "confidence"],
+      "properties": {
+        "grounded_on": { "type": "array", "items": { "$ref": "#/$defs/EntityId" }, "minItems": 1, "description": "Entity ids from the input that this output actually used. Empty = hallucination; discard." },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  },
+  "tasks": {
+    "prioritization.suggest": {
+      "description": "Propose WSJF or RICE component values for scorable items from their linked evidence. Humans confirm the numbers.",
+      "input": {
+        "type": "object",
+        "required": ["model", "items"],
+        "properties": {
+          "model": { "type": "string", "enum": ["WSJF", "RICE"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "title"],
+              "properties": {
+                "id": { "$ref": "#/$defs/EntityId" },
+                "title": { "type": "string" },
+                "estimate": { "type": ["number", "null"] },
+                "linked_benefits": { "type": "array", "items": { "type": "string" } },
+                "linked_risks": { "type": "array", "items": { "type": "string" } },
+                "deadline": { "type": ["string", "null"], "format": "date" },
+                "reach_estimate": { "type": ["number", "null"] }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["scores"],
+            "properties": {
+              "scores": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "components", "rationale"],
+                  "properties": {
+                    "id": { "$ref": "#/$defs/EntityId" },
+                    "components": {
+                      "type": "object",
+                      "description": "WSJF: user_business_value, time_criticality, risk_opportunity, job_size. RICE: reach, impact, confidence_pct, effort.",
+                      "additionalProperties": { "$ref": "#/$defs/GroundedNumber" }
+                    },
+                    "rationale": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "daily-brief.compose": {
+      "description": "Narrate the day's already-computed suggested actions into a ranked brief and tips. Narration only — it may not add actions the rules did not emit.",
+      "input": {
+        "type": "object",
+        "required": ["date", "suggested_actions"],
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "manager_name": { "type": "string" },
+          "suggested_actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "urgency", "text", "refs"],
+              "properties": {
+                "id": { "$ref": "#/$defs/EntityId" },
+                "type": { "type": "string", "enum": ["sprint_end", "complex_check_in", "stakeholder_update_due", "one_on_one_overdue", "gate_deadline", "deploy_attention", "meeting_prep"] },
+                "urgency": { "type": "string", "enum": ["low", "med", "high"] },
+                "text": { "type": "string" },
+                "refs": { "type": "array", "items": { "$ref": "#/$defs/EntityId" } }
+              }
+            }
+          },
+          "calendar": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["headline", "ranked_action_ids", "tips"],
+            "properties": {
+              "headline": { "type": "string", "description": "One or two sentences summarizing the day." },
+              "ranked_action_ids": { "type": "array", "items": { "$ref": "#/$defs/EntityId" }, "description": "The input action ids, re-ordered. May not contain ids absent from the input." },
+              "tips": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        ]
+      }
+    },
+    "health.explain": {
+      "description": "Explain a pre-computed health composite in plain language and suggest a next action. It does not compute the score.",
+      "input": {
+        "type": "object",
+        "required": ["entity", "composite", "drivers"],
+        "properties": {
+          "entity": { "type": "object", "required": ["id", "type", "name"], "properties": { "id": { "$ref": "#/$defs/EntityId" }, "type": { "type": "string", "enum": ["portfolio", "program", "project"] }, "name": { "type": "string" } } },
+          "composite": { "type": "number", "minimum": 0, "maximum": 100 },
+          "drivers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "value", "trend"],
+              "properties": {
+                "name": { "type": "string", "enum": ["schedule_variance", "cost_variance", "scope_creep", "raid_exposure", "dependency_risk", "benefit_confidence", "team_health"] },
+                "value": { "type": "number" },
+                "trend": { "type": "string", "enum": ["improving", "flat", "worsening"] }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["summary", "primary_driver", "suggested_action"],
+            "properties": {
+              "summary": { "type": "string" },
+              "primary_driver": { "type": "string" },
+              "suggested_action": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "teammate.insight": {
+      "description": "Summarize where a teammate thrives and propose growth nudges. Growth-framed only. No ranking, no cross-person comparison, no performance verdict — the schema has no field for them.",
+      "input": {
+        "type": "object",
+        "required": ["person_id", "velocity_samples", "skills"],
+        "properties": {
+          "person_id": { "$ref": "#/$defs/EntityId" },
+          "velocity_samples": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["dimension", "band", "throughput"],
+              "properties": {
+                "dimension": { "type": "string", "enum": ["complexity", "effort", "risk"] },
+                "band": { "type": "string" },
+                "throughput": { "type": "number" },
+                "caveat": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["skill", "proficiency", "interest"],
+              "properties": { "skill": { "type": "string" }, "proficiency": { "type": "integer", "minimum": 1, "maximum": 5 }, "interest": { "type": "integer", "minimum": 1, "maximum": 5 } }
+            }
+          },
+          "upcoming_demand": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["thrives_on", "nudges"],
+            "properties": {
+              "thrives_on": { "type": "string", "description": "Plain-language read of where this person flows. Framed as self-insight, not evaluation." },
+              "stretch_candidates": { "type": "array", "items": { "type": "string" }, "description": "Skills with interest above proficiency that upcoming demand matches." },
+              "nudges": { "type": "array", "items": { "type": "string" }, "description": "Growth-oriented suggestions the manager may offer. Suggestions, never directives." }
+            }
+          }
+        ]
+      }
+    },
+    "email.digest": {
+      "description": "Turn new email messages into action items, decisions, and risks, linked to entities. Snippets are used verbatim; nothing is fabricated.",
+      "input": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": { "type": "array", "items": { "$ref": "https://ppm.local/contracts/ingestion.schema.json#/$defs/EmailMessageEnvelope" } }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["items"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["kind", "summary", "thread_id"],
+                  "properties": {
+                    "kind": { "type": "string", "enum": ["needs_reply", "decision", "risk", "fyi"] },
+                    "summary": { "type": "string" },
+                    "thread_id": { "type": "string" },
+                    "linked_refs": { "type": "array", "items": { "$ref": "#/$defs/EntityId" } }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "stakeholder.update": {
+      "description": "Draft an audience-appropriate update for a stakeholder from the status of the items they are invested in. Draft only — a human sends it.",
+      "input": {
+        "type": "object",
+        "required": ["stakeholder", "items"],
+        "properties": {
+          "stakeholder": { "type": "object", "required": ["id", "name", "interest_level"], "properties": { "id": { "$ref": "#/$defs/EntityId" }, "name": { "type": "string" }, "interest_level": { "type": "string", "enum": ["manage_closely", "keep_satisfied", "keep_informed", "monitor"] } } },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "name", "status"],
+              "properties": { "id": { "$ref": "#/$defs/EntityId" }, "name": { "type": "string" }, "status": { "type": "string" }, "reason_invested": { "type": ["string", "null"] } }
+            }
+          }
+        }
+      },
+      "output": {
+        "allOf": [
+          { "$ref": "#/$defs/OutputBase" },
+          {
+            "type": "object",
+            "required": ["draft", "is_draft"],
+            "properties": {
+              "draft": { "type": "string" },
+              "is_draft": { "type": "boolean", "const": true, "description": "Always a draft; the toolkit never auto-sends." }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

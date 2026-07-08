@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppm.local/contracts/caching.schema.json",
+  "title": "PPM AI Compute-Economy Contracts",
+  "description": "Structures for the caching / reuse / learning layer that sits behind the AIPort: cache entries and their dependency fingerprints, per-task cache policy, human feedback (the label stream), the learned-model registry, and the resolution result recorded for every request.",
+  "$defs": {
+    "ResolutionTier": {
+      "type": "string",
+      "enum": ["exact_cache", "semantic_cache", "incremental", "learned_model", "llm"],
+      "description": "Which tier of the resolution ladder actually served a request."
+    },
+    "CacheDependency": {
+      "type": "object",
+      "description": "One edge of a cache entry's dependency fingerprint. Derived from the output's grounded_on plus the task input's declared fields. Queried by the event-driven invalidation handler.",
+      "required": ["entity_type", "entity_id"],
+      "properties": {
+        "entity_type": { "type": "string", "enum": ["portfolio", "program", "project", "work_item", "release", "deployment", "stakeholder", "person", "benefit", "objective", "cadence"] },
+        "entity_id": { "type": "string", "format": "uuid" },
+        "field": { "type": ["string", "null"], "description": "The specific field consumed, when known, enabling field-level invalidation (e.g. 'estimate' invalidates a WSJF score but not a summary)." },
+        "version": { "type": ["integer", "string", "null"], "description": "Version/updated_at of the entity at cache time; a change means stale." }
+      }
+    },
+    "CacheEntry": {
+      "type": "object",
+      "description": "A stored AI result, keyed by content. Cached at the atomic grain of the task (per message, per driver), not the whole assembled request.",
+      "required": ["key_hash", "task_type", "input_hash", "output", "model_version", "resolution_tier", "created_at", "stale"],
+      "properties": {
+        "key_hash": { "type": "string", "description": "hash(task_type + normalized_input)." },
+        "task_type": { "type": "string" },
+        "grain": { "type": ["string", "null"], "description": "The atomic unit this entry represents, for incremental reuse (e.g. 'email_message:THREAD-9', 'driver:cost_variance')." },
+        "input_hash": { "type": "string" },
+        "output": { "type": "object", "additionalProperties": true, "description": "The stored task output (already validated against its ai-tasks.schema output contract)." },
+        "model_version": { "type": "string", "description": "LLM or learned-model version that produced this, so a model upgrade can invalidate en masse." },
+        "resolution_tier": { "$ref": "#/$defs/ResolutionTier" },
+        "dependencies": { "type": "array", "items": { "$ref": "#/$defs/CacheDependency" } },
+        "embedding": { "type": ["array", "null"], "items": { "type": "number" }, "description": "Normalized-input embedding; present only when the task opts into the semantic tier." },
+        "tokens_used": { "type": "integer", "minimum": 0 },
+        "tokens_saved": { "type": "integer", "minimum": 0, "description": "Cumulative tokens avoided by reuse of this entry." },
+        "hit_count": { "type": "integer", "minimum": 0, "default": 0 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_used_at": { "type": ["string", "null"], "format": "date-time" },
+        "expires_at": { "type": ["string", "null"], "format": "date-time", "description": "TTL backstop; null = event-invalidation only." },
+        "stale": { "type": "boolean", "default": false, "description": "Marked by the invalidation handler; a stale entry is never served for a decision-bearing task." }
+      }
+    },
+    "CachePolicy": {
+      "type": "object",
+      "description": "Per-task configuration of the resolution ladder. This is the fence that keeps semantic reuse away from flip-sensitive tasks.",
+      "required": ["task_type", "tiers_enabled"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "tiers_enabled": { "type": "array", "items": { "$ref": "#/$defs/ResolutionTier" }, "description": "Which tiers this task may use. Prioritization, e.g., omits 'semantic_cache'." },
+        "ttl_seconds": { "type": ["integer", "null"], "minimum": 0 },
+        "semantic_threshold": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Cosine-similarity floor for a semantic reuse; high (e.g. 0.95) by design." },
+        "decompose_grain": { "type": ["string", "null"], "description": "The atomic unit for incremental reuse, e.g. 'per_message', 'per_driver', 'per_action'." },
+        "decision_bearing": { "type": "boolean", "default": false, "description": "If true, never serve a stale entry; recompute on any doubt." }
+      }
+    },
+    "AIFeedback": {
+      "type": "object",
+      "description": "A human verdict on an AI output — the free label stream that trains the learning layer.",
+      "required": ["ai_task_id", "task_type", "verdict", "at"],
+      "properties": {
+        "ai_task_id": { "type": "string", "format": "uuid" },
+        "task_type": { "type": "string" },
+        "verdict": { "type": "string", "enum": ["accept", "edit", "dismiss"] },
+        "edited_output": { "type": ["object", "null"], "additionalProperties": true, "description": "The corrected output when the human edited it — the highest-value label." },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "LearnedModel": {
+      "type": "object",
+      "description": "Registry record for a model in the learning layer. A cache of judgment; can go stale and be rolled back.",
+      "required": ["task_type", "kind", "version", "active", "trained_at"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "kind": { "type": "string", "enum": ["regression", "classifier", "preference"] },
+        "version": { "type": "string" },
+        "artifact_ref": { "type": "string", "description": "Where the serialized model lives (local file in the personal edition)." },
+        "trained_on": { "type": ["integer", "null"], "description": "Number of labelled examples used." },
+        "metrics": { "type": "object", "additionalProperties": true, "description": "Held-out accuracy / MAE / etc., monitored against the ongoing feedback stream." },
+        "confidence_floor": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Below this, escalate to the LLM." },
+        "active": { "type": "boolean", "description": "Deactivate to fall back to the LLM instantly." },
+        "trained_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ResolutionResult": {
+      "type": "object",
+      "description": "Recorded on every AI request (extends the AI_TASK log) so the compute-economy panel can report tier distribution and savings.",
+      "required": ["task_type", "resolution_tier", "tokens_used", "tokens_saved"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "resolution_tier": { "$ref": "#/$defs/ResolutionTier" },
+        "cache_key": { "type": ["string", "null"] },
+        "learned_model_version": { "type": ["string", "null"] },
+        "escalated_to_llm": { "type": "boolean", "default": false, "description": "True when a learned model was below its confidence floor and deferred." },
+        "tokens_used": { "type": "integer", "minimum": 0 },
+        "tokens_saved": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "examples": [
+    {
+      "key_hash": "b3f1c9…",
+      "task_type": "email.digest",
+      "grain": "email_message:THREAD-9",
+      "input_hash": "9a02…",
+      "output": { "kind": "needs_reply", "summary": "Vendor asks to confirm the Ledger cutover date.", "thread_id": "THREAD-9", "linked_refs": ["6f1c2d34-0000-4000-8000-000000000001"] },
+      "model_version": "llm-2026-01",
+      "resolution_tier": "llm",
+      "dependencies": [{ "entity_type": "project", "entity_id": "6f1c2d34-0000-4000-8000-000000000001", "field": null, "version": 42 }],
+      "tokens_used": 380,
+      "tokens_saved": 1140,
+      "hit_count": 3,
+      "created_at": "2026-03-16T14:00:00Z",
+      "last_used_at": "2026-03-16T20:00:00Z",
+      "expires_at": null,
+      "stale": false
+    }
+  ]
+}

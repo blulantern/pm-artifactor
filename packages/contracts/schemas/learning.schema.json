@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppm.local/contracts/learning.schema.json",
+  "title": "PPM Learning-Layer Contracts",
+  "description": "Structures for the three-layer intelligence model: feature records emitted by the deterministic layer (the feature store and ML input), per-task computation profiles that route requests, training examples assembled from features + human labels + outcomes, and shadow-evaluation records that gate a learned model's promotion.",
+  "$defs": {
+    "EntityRef": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["portfolio", "program", "project", "work_item", "release", "deployment", "stakeholder", "person", "benefit", "objective", "cadence"] },
+        "id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "FeatureValue": {
+      "description": "A single computed feature. Typed so the same record serves dashboards and models without skew.",
+      "oneOf": [
+        { "type": "object", "required": ["kind", "number"], "properties": { "kind": { "const": "number" }, "number": { "type": "number" } } },
+        { "type": "object", "required": ["kind", "band"], "properties": { "kind": { "const": "band" }, "band": { "type": "string", "enum": ["low", "med", "high"] } } },
+        { "type": "object", "required": ["kind", "category"], "properties": { "kind": { "const": "category" }, "category": { "type": "string" } } },
+        { "type": "object", "required": ["kind", "trend"], "properties": { "kind": { "const": "trend" }, "trend": { "type": "string", "enum": ["improving", "flat", "worsening"] } } },
+        { "type": "object", "required": ["kind", "vector"], "properties": { "kind": { "const": "vector" }, "vector": { "type": "array", "items": { "type": "number" } } } }
+      ]
+    },
+    "FeatureRecord": {
+      "type": "object",
+      "description": "One deterministic computation, versioned and entity-linked. Emitted by the deterministic layer; consumed by dashboards now and model training later.",
+      "required": ["metric", "entity", "value", "computed_at", "deterministic_fn", "fn_version"],
+      "properties": {
+        "metric": { "type": "string", "description": "e.g. 'velocity.throughput.complexity.high', 'health.driver.cost_variance', 'sprint.points_done_ratio'." },
+        "entity": { "$ref": "#/$defs/EntityRef" },
+        "value": { "$ref": "#/$defs/FeatureValue" },
+        "computed_at": { "type": "string", "format": "date-time" },
+        "deterministic_fn": { "type": "string", "description": "The pure function that produced this, for traceability." },
+        "fn_version": { "type": "string", "description": "Bump when the formula changes so downstream examples can be re-derived." },
+        "inputs_hash": { "type": ["string", "null"], "description": "Hash of the source data points, for cache/invalidation alignment." }
+      }
+    },
+    "TaskComputationProfile": {
+      "type": "object",
+      "description": "Per-task routing config: which layer serves it, its feature spec, and whether it may graduate to a learned model.",
+      "required": ["task_type", "mode"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "mode": { "type": "string", "enum": ["deterministic", "hybrid", "generative"], "description": "'deterministic' never calls a model; 'hybrid' computes a core then generates a surface; 'generative' needs the LLM." },
+        "deterministic_first": { "type": "boolean", "default": true, "description": "Router tries the deterministic core before any cache/model tier." },
+        "feature_metrics": { "type": "array", "items": { "type": "string" }, "description": "The FeatureRecord metrics this task reads/emits." },
+        "graduation_eligible": { "type": "boolean", "default": false, "description": "May a learned model eventually serve this task's generative part?" },
+        "min_examples_to_train": { "type": ["integer", "null"], "minimum": 1 },
+        "promotion_agreement": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Shadow-agreement threshold required before a learned model is promoted." }
+      }
+    },
+    "TrainingExample": {
+      "type": "object",
+      "description": "One row of a per-task versioned dataset. Features (from the deterministic layer) + the served output + the human label + the eventual outcome. Assembled passively from normal use.",
+      "required": ["task_type", "features", "dataset_version"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "features": { "type": "array", "items": { "$ref": "#/$defs/FeatureRecord" }, "description": "Captured identically at train and serve time — no skew." },
+        "served_output": { "type": ["object", "null"], "additionalProperties": true },
+        "served_by": { "type": ["string", "null"], "enum": ["deterministic", "llm", "learned_model", null] },
+        "label": {
+          "type": ["object", "null"],
+          "description": "The human verdict from AI_FEEDBACK — the true target.",
+          "properties": {
+            "verdict": { "type": "string", "enum": ["accept", "edit", "dismiss"] },
+            "corrected_output": { "type": ["object", "null"], "additionalProperties": true }
+          }
+        },
+        "outcome_ref": { "$ref": "#/$defs/EntityRef" },
+        "outcome_value": { "type": ["number", "string", "boolean", "null"], "description": "What actually happened (sprint hit goal? risk materialized?), joined at time T+n." },
+        "dataset_version": { "type": "string" }
+      }
+    },
+    "ShadowEvaluation": {
+      "type": "object",
+      "description": "A candidate learned model run against live traffic without serving. Gates promotion to the cascade.",
+      "required": ["task_type", "learned_model_version", "sample_size", "agreement", "evaluated_at"],
+      "properties": {
+        "task_type": { "type": "string" },
+        "learned_model_version": { "type": "string" },
+        "sample_size": { "type": "integer", "minimum": 1 },
+        "agreement": { "type": "number", "minimum": 0, "maximum": 1, "description": "Rate at which the shadow output matched the served/human-accepted output." },
+        "regressions": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Cases where the shadow model would have been worse — reviewed before promotion." },
+        "recommend_promote": { "type": "boolean" },
+        "evaluated_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "metric": "sprint.points_done_ratio",
+      "entity": { "type": "cadence", "id": "6f1c2d34-0000-4000-8000-0000000000aa" },
+      "value": { "kind": "number", "number": 0.72 },
+      "computed_at": "2026-03-16T18:00:00Z",
+      "deterministic_fn": "sprintProgress",
+      "fn_version": "1.2.0",
+      "inputs_hash": "c4d1…"
+    }
+  ]
+}

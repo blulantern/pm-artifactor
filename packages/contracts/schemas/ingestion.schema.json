@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppm.local/contracts/ingestion.schema.json",
+  "title": "PPM Read-Only Ingestion Envelopes",
+  "description": "Canonical normalized shapes that every external source is mapped into before touching the canonical model. Read-only. Every record carries provenance for lineage and replay.",
+  "$defs": {
+    "Provenance": {
+      "type": "object",
+      "description": "Where this record came from. Present on every ingested envelope.",
+      "required": ["source", "external_id", "pulled_at", "mode"],
+      "properties": {
+        "source": { "type": "string", "enum": ["jira", "asana", "monday", "github", "bitbucket", "azure_devops", "google_calendar", "outlook_calendar", "gmail", "outlook_mail"] },
+        "external_id": { "type": "string", "description": "The id in the source system." },
+        "external_url": { "type": "string" },
+        "pulled_at": { "type": "string", "format": "date-time" },
+        "mode": { "type": "string", "const": "read_only" },
+        "raw": { "type": "object", "description": "Original payload, retained for replay and lineage.", "additionalProperties": true }
+      }
+    },
+    "CanonicalRef": {
+      "type": "object",
+      "description": "A pointer to a canonical entity this record links to.",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["portfolio", "program", "project", "work_item", "release", "deployment", "stakeholder", "person", "benefit", "objective"] },
+        "id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "WorkItemEnvelope": {
+      "type": "object",
+      "description": "A Jira issue / Asana task / Monday item / ADO work item, normalized.",
+      "required": ["provenance", "title", "canonical_type", "status_category"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "title": { "type": "string" },
+        "canonical_type": { "type": "string", "description": "Resolved WorkItemType name (e.g. Story, Work Package)." },
+        "hierarchy_level": { "type": "integer", "minimum": 1 },
+        "parent_external_id": { "type": ["string", "null"] },
+        "status_raw": { "type": "string", "description": "The source's status string." },
+        "status_category": { "type": "string", "enum": ["todo", "in_progress", "done", "blocked"] },
+        "assignee_email": { "type": ["string", "null"], "format": "email" },
+        "estimate": { "type": ["number", "null"] },
+        "estimate_unit": { "type": ["string", "null"], "enum": ["points", "hours", "days", "tshirt", null] },
+        "complexity_band": { "type": ["string", "null"], "enum": ["low", "med", "high", null] },
+        "risk_band": { "type": ["string", "null"], "enum": ["low", "med", "high", null] },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "sprint_external_id": { "type": ["string", "null"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "last_status_change_at": { "type": ["string", "null"], "format": "date-time" },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/CanonicalRef" } }
+      }
+    },
+    "PersonEnvelope": {
+      "type": "object",
+      "description": "A directory identity (Entra/Workspace) or a work-tool assignee, normalized.",
+      "required": ["provenance", "name", "email"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": ["string", "null"] },
+        "team_external_id": { "type": ["string", "null"] },
+        "active": { "type": "boolean", "default": true }
+      }
+    },
+    "SprintEnvelope": {
+      "type": "object",
+      "description": "A sprint/iteration/PI window, normalized to a Cadence.",
+      "required": ["provenance", "name", "kind", "start_date", "end_date"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "name": { "type": "string" },
+        "kind": { "type": "string", "enum": ["sprint", "iteration", "pi", "phase_window", "release"] },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "goal": { "type": ["string", "null"] },
+        "state": { "type": "string", "enum": ["future", "active", "closed"] },
+        "committed_points": { "type": ["number", "null"] }
+      }
+    },
+    "DeploymentEnvelope": {
+      "type": "object",
+      "description": "A GitHub/Bitbucket/ADO build or deployment run, normalized (read-only monitoring).",
+      "required": ["provenance", "environment", "status", "started_at"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "environment": { "type": "string", "enum": ["dev", "staging", "prod", "other"] },
+        "status": { "type": "string", "enum": ["running", "success", "failed", "rolled_back"] },
+        "build_ref": { "type": ["string", "null"] },
+        "commit_sha": { "type": ["string", "null"] },
+        "is_rollback": { "type": "boolean", "default": false },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": ["string", "null"], "format": "date-time" },
+        "pr_external_ids": { "type": "array", "items": { "type": "string" } },
+        "work_item_links": { "type": "array", "items": { "$ref": "#/$defs/CanonicalRef" } }
+      }
+    },
+    "CalendarEventEnvelope": {
+      "type": "object",
+      "description": "A calendar event (read-only), used for the daily list and 1:1 scheduling.",
+      "required": ["provenance", "title", "start", "end"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "title": { "type": "string" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "attendee_emails": { "type": "array", "items": { "type": "string", "format": "email" } },
+        "is_free_time": { "type": "boolean", "default": false, "description": "True for open/available slots synthesized from free-busy." },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/CanonicalRef" } }
+      }
+    },
+    "EmailMessageEnvelope": {
+      "type": "object",
+      "description": "An email message (read-only), input to the every-2-hour digest task.",
+      "required": ["provenance", "subject", "from_email", "received_at", "snippet"],
+      "properties": {
+        "provenance": { "$ref": "#/$defs/Provenance" },
+        "thread_id": { "type": "string" },
+        "subject": { "type": "string" },
+        "from_email": { "type": "string", "format": "email" },
+        "to_emails": { "type": "array", "items": { "type": "string", "format": "email" } },
+        "received_at": { "type": "string", "format": "date-time" },
+        "snippet": { "type": "string", "description": "Body text or extract. Never fabricated; taken verbatim from the message." },
+        "is_unread": { "type": "boolean", "default": true },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/CanonicalRef" } }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/WorkItemEnvelope" },
+    { "$ref": "#/$defs/PersonEnvelope" },
+    { "$ref": "#/$defs/SprintEnvelope" },
+    { "$ref": "#/$defs/DeploymentEnvelope" },
+    { "$ref": "#/$defs/CalendarEventEnvelope" },
+    { "$ref": "#/$defs/EmailMessageEnvelope" }
+  ],
+  "examples": [
+    {
+      "provenance": { "source": "jira", "external_id": "DANA-204", "external_url": "https://x.atlassian.net/browse/DANA-204", "pulled_at": "2026-03-16T14:00:00Z", "mode": "read_only" },
+      "title": "Normalize Monday adapter conflict handling",
+      "canonical_type": "Story",
+      "hierarchy_level": 3,
+      "status_raw": "In Progress",
+      "status_category": "in_progress",
+      "assignee_email": "dana@acme.co",
+      "estimate": 5,
+      "estimate_unit": "points",
+      "complexity_band": "high",
+      "risk_band": "med",
+      "labels": ["sync", "adapter"],
+      "sprint_external_id": "SPR-13",
+      "created_at": "2026-03-02T09:00:00Z",
+      "updated_at": "2026-03-12T16:20:00Z",
+      "last_status_change_at": "2026-03-12T16:20:00Z",
+      "links": [{ "type": "project", "id": "6f1c2d34-0000-4000-8000-000000000001" }]
+    }
+  ]
+}
