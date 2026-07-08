@@ -5,3 +5,4 @@ export * from "./domain/events/domain-event.js";
 export * from "./domain/events/work-item-events.js";
 export * from "./domain/workitem/work-item.js";
 export * from "./domain/workitem/work-item-tree.js";
+export * from "./domain/methodology/config.js";
