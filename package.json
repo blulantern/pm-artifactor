@@ -7,9 +7,9 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit",
+    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/contracts/tsconfig.json --noEmit && tsc -p db/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
     "depcruise": "depcruise packages/core/src --config .dependency-cruiser.cjs",
-    "test:all": "depcruise packages/core/src --config .dependency-cruiser.cjs && vitest run"
+    "test:all": "depcruise packages/core/src --config .dependency-cruiser.cjs && vitest run && pnpm run typecheck"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
