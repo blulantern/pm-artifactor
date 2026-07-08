@@ -1,0 +1,22 @@
+{
+  "name": "pm-artifactor",
+  "private": true,
+  "version": "0.0.0",
+  "engines": { "node": ">=20" },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc -b --noEmit || tsc -b",
+    "depcruise": "depcruise packages/core/src --config .dependency-cruiser.cjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "dependency-cruiser": "^16.4.0",
+    "@types/node": "^22.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
