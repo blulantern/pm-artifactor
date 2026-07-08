@@ -185,6 +185,7 @@ export async function buildProgramsView(prisma: PrismaClient) {
     benefitPct: p.benefitPct ?? 0,
     targetEnd: p.targetEnd,
     projectCount: p.projects.length,
+    projects: p.projects.map((proj) => ({ id: proj.id, name: proj.name })),
     benefits: p.benefits.map((b) => ({
       id: b.id,
       name: b.name,
