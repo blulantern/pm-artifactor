@@ -3,3 +3,5 @@ export * from "./domain/shared/ids.js";
 export * from "./domain/shared/enums.js";
 export * from "./domain/events/domain-event.js";
 export * from "./domain/events/work-item-events.js";
+export * from "./domain/workitem/work-item.js";
+export * from "./domain/workitem/work-item-tree.js";
