@@ -103,7 +103,7 @@ export async function buildProjectView(prisma: PrismaClient, id: string) {
     ? 0
     : clamp((blockedItems / project.workItems.length) * 100);
   const benefitSeverity = clamp(100 - (project.program?.benefitPct ?? 50));
-  const scopeSeverity = clamp(openRaid.filter((r) => r.category === "scope" || r.category === "issue").length * 15);
+  const scopeSeverity = clamp(openRaid.filter((r) => r.category === "issue").length * 15);
 
   const drivers: HealthDriverInput[] = [
     { name: "schedule_variance", severity: scheduleSeverity, trend: trendFor(project.spi, 1) },
@@ -252,13 +252,17 @@ export async function buildTodayView(prisma: PrismaClient) {
       lastMet: p.oneOnOnes.reduce<Date | null>((latest, o) => (latest == null || o.metOn > latest ? o.metOn : latest), null),
       cadenceDays: DEFAULT_ONE_ON_ONE_CADENCE_DAYS,
     })),
+    // Only include gates with a real scheduled decision date — an undecided/pending gate has
+    // no deadline, and a "now" fallback would make the gate-deadline rule fire perpetually.
     // Deliverable-acceptance tracking isn't modeled yet — synthesized as 0 (no data to report).
-    gates: gateRows.map((g) => ({
-      projectId: g.phase.project.id,
-      name: g.name,
-      deadline: g.decisionDate ?? now,
-      unacceptedDeliverables: 0,
-    })),
+    gates: gateRows
+      .filter((g) => g.decisionDate != null)
+      .map((g) => ({
+        projectId: g.phase.project.id,
+        name: g.name,
+        deadline: g.decisionDate!,
+        unacceptedDeliverables: 0,
+      })),
     deployments: deployments.map((d) => ({ id: d.id, releaseVersion: d.release.version, status: d.status })),
     meetings: meetingsRows.map((m) => ({ title: m.title, start: m.start, linkLabel: m.linkLabel ?? null })),
   };
