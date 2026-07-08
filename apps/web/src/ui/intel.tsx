@@ -3,7 +3,7 @@ import type { getIntelView } from "@/server/view-models";
 
 type IntelViewModel = Awaited<ReturnType<typeof getIntelView>>;
 
-/** Display label + color for each AiTask/AiResultCache resolutionTier code, cheapest-first. */
+/** Display label + color for each tier code, cheapest-first. */
 const TIER_META: Record<string, [string, string]> = {
   deterministic: ["Deterministic", "var(--teal)"],
   exact_cache: ["Exact cache", "var(--teal3)"],
@@ -12,7 +12,6 @@ const TIER_META: Record<string, [string, string]> = {
   learned_model: ["Learned", "var(--violet)"],
   llm: ["LLM", "var(--amber)"],
 };
-const TIER_ORDER = Object.keys(TIER_META);
 
 /** Designed target distribution — illustrative only, shown while no AiTask rows have been logged. */
 const PROJECTED_TIERS: [string, number, string][] = [
@@ -51,16 +50,30 @@ function Ladder({ rows, max }: { rows: [string, number, string][]; max: number }
   );
 }
 
+/** Ladder row rendered from a real { name, count, pct } tier — shows both the raw count and the share. */
+function LiveLadder({ tiers }: { tiers: IntelViewModel["tiers"] }) {
+  return (
+    <div>
+      {tiers.map((t) => {
+        const [label, color] = TIER_META[t.name] ?? [t.name, "var(--faint)"];
+        return (
+          <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 9 }}>
+            <div style={{ width: 100, fontSize: 12.5, fontWeight: 500 }}>{label}</div>
+            <div style={{ flex: 1 }}>
+              <Bars value={t.pct} max={100} color={color} />
+            </div>
+            <span className="mono" style={{ fontSize: 11, width: 72, textAlign: "right" }}>
+              {t.count} · {t.pct.toFixed(0)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Intel({ view }: { view: IntelViewModel }) {
-  const total = view.cacheEntryCount;
-  const liveRows: [string, number, string][] = TIER_ORDER.filter((code) =>
-    view.resolutionTiers.some((t) => t.tier === code && t.count > 0),
-  ).map((code) => {
-    const [label, color] = TIER_META[code] ?? [code, "var(--faint)"];
-    const count = view.resolutionTiers.find((t) => t.tier === code)?.count ?? 0;
-    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-    return [label, pct, color];
-  });
+  const liveTiers = view.tiers.filter((t) => t.count > 0);
 
   return (
     <div className="view" style={{ maxWidth: 920 }}>
@@ -70,7 +83,23 @@ export function Intel({ view }: { view: IntelViewModel }) {
         the dial.
       </div>
 
-      {!view.hasLiveData ? (
+      {view.hasLiveData ? (
+        <div
+          className="card"
+          style={{
+            padding: "12px 16px",
+            marginBottom: 16,
+            background: "var(--win-bg)",
+            border: "1px solid var(--win)",
+            fontSize: 12.5,
+            color: "var(--ink)",
+            fontWeight: 500,
+          }}
+        >
+          Live — computed from {view.aiTaskCount} logged resolutions ({view.cacheEntryCount} cache entries,{" "}
+          {view.featureRecordCount} feature records).
+        </div>
+      ) : (
         <div
           className="card"
           style={{
@@ -86,7 +115,7 @@ export function Intel({ view }: { view: IntelViewModel }) {
           Projected — no live AI calls logged yet ({view.aiTaskCount} AiTask rows). The AI layer ships in a later
           phase; the ladder and pipeline below show the designed architecture, not measured traffic.
         </div>
-      ) : null}
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 16 }}>
         <Kpi value={view.aiTaskCount} label="AI tasks logged" color="var(--teal)" />
@@ -98,11 +127,11 @@ export function Intel({ view }: { view: IntelViewModel }) {
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <Panel
           title="Resolution ladder · where requests are served"
-          sub={view.hasLiveData ? "cheapest correct tier first" : "designed target — not yet measured"}
+          sub={view.hasLiveData ? "cheapest correct tier first · measured" : "designed target — not yet measured"}
         >
           {view.hasLiveData ? (
-            liveRows.length > 0 ? (
-              <Ladder rows={liveRows} max={100} />
+            liveTiers.length > 0 ? (
+              <LiveLadder tiers={liveTiers} />
             ) : (
               <div className="sub">No cache entries logged yet.</div>
             )
@@ -117,7 +146,9 @@ export function Intel({ view }: { view: IntelViewModel }) {
             prove accuracy against the deterministic/cache baseline, with the LLM tier as fallback for whatever
             neither layer can resolve.
             {view.hasLiveData
-              ? " Per-model promotion status will appear here once the model registry is wired up."
+              ? view.models.length > 0
+                ? ""
+                : " No model registry exists yet, so per-model promotion status isn't tracked — the ladder above is measured, but nothing has graduated into the learned tier."
               : " No AiTask rows exist yet, so no model has entered shadow mode — there is nothing to report per-model."}
           </div>
         </Panel>

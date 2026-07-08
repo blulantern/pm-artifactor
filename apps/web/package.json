@@ -7,7 +7,8 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "seed": "pnpm --filter @pma/db seed"
+    "seed": "pnpm --filter @pma/db seed",
+    "warm": "tsx src/server/warm.ts"
   },
   "dependencies": {
     "@pma/contracts": "workspace:*",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.0"
   }
 }

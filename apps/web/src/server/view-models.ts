@@ -439,26 +439,41 @@ export const getInboxView = () => buildInboxView(db());
 // ============================== Intelligence (AI cost/cache layer) ==============================
 
 export async function buildIntelView(prisma: PrismaClient) {
-  const [aiTaskCount, featureRecordCount, cacheEntries] = await Promise.all([
+  const [aiTaskCount, featureRecordCount, cacheEntryCount, tokensSavedAgg, tierGroups] = await Promise.all([
     prisma.aiTask.count(),
     prisma.featureRecord.count(),
-    prisma.aiResultCache.findMany(),
+    prisma.aiResultCache.count(),
+    // Sum from AiTask (not AiResultCache) — every resolution, hit or miss, logs an AiTask row,
+    // so this reflects the full corpus rather than only entries that have ever been re-used.
+    prisma.aiTask.aggregate({ _sum: { tokensSaved: true } }),
+    prisma.aiTask.groupBy({ by: ["resolutionTier"], _count: { _all: true } }),
   ]);
-  const tokensUsed = cacheEntries.reduce((s, c) => s + c.tokensUsed, 0);
-  const tokensSaved = cacheEntries.reduce((s, c) => s + c.tokensSaved, 0);
-  const tierCounts = new Map<string, number>();
-  for (const c of cacheEntries) tierCounts.set(c.resolutionTier, (tierCounts.get(c.resolutionTier) ?? 0) + 1);
+  const tokensSaved = tokensSavedAgg._sum.tokensSaved ?? 0;
+  const countForTier = (tier: string) => tierGroups.find((g) => g.resolutionTier === tier)?._count._all ?? 0;
+
+  // Deterministic compute (feature records) sits alongside the generative resolution tiers
+  // (exact_cache, llm) logged on AiTask — together they tell the honest "compute-first" story:
+  // deterministic dominates, cache absorbs repeats, LLM is the last resort.
+  const tierCounts = [
+    { name: "deterministic", count: featureRecordCount },
+    { name: "exact_cache", count: countForTier("exact_cache") },
+    { name: "llm", count: countForTier("llm") },
+  ];
+  const totalTierCount = tierCounts.reduce((s, t) => s + t.count, 0);
+  const tiers = tierCounts.map((t) => ({ ...t, pct: totalTierCount > 0 ? (t.count / totalTierCount) * 100 : 0 }));
 
   return {
-    // No AiTask rows are seeded this phase — the Intelligence page should render a
-    // "projected / no live AI calls yet" state rather than fabricated metrics.
+    // No AiTask rows are logged until `warmIntelligence` runs — the Intelligence page should
+    // render a "projected / no live AI calls yet" state rather than fabricated metrics.
     hasLiveData: aiTaskCount > 0,
     aiTaskCount,
     featureRecordCount,
-    cacheEntryCount: cacheEntries.length,
-    tokensUsed,
+    cacheEntryCount,
     tokensSaved,
-    resolutionTiers: [...tierCounts.entries()].map(([tier, count]) => ({ tier, count })),
+    tiers,
+    // No model registry exists yet (per-model shadow/live promotion is a later phase) —
+    // reserved so the page can render per-model status once that lands.
+    models: [] as { name: string; status: string }[],
   };
 }
 export const getIntelView = () => buildIntelView(db());
@@ -466,17 +481,31 @@ export const getIntelView = () => buildIntelView(db());
 // ============================== Connections ==============================
 
 export async function buildConnectionsView(prisma: PrismaClient) {
-  const systems = await prisma.externalSystem.findMany({ include: { connections: true } });
+  const systems = await prisma.externalSystem.findMany({
+    include: { connections: { include: { snapshots: true, links: true } } },
+  });
   return systems.map((s) => ({
     id: s.id,
     vendor: s.vendor,
     baseUrl: s.baseUrl ?? null,
-    connections: s.connections.map((c) => ({
-      id: c.id,
-      direction: c.direction,
-      lastPulledAt: c.lastPulledAt,
-      authRef: c.authRef,
-    })),
+    connections: s.connections.map((c) => {
+      // A connection can carry a `lastPulledAt` field with no real ingestion behind it
+      // (e.g. seed metadata). Prefer the latest IngestionSnapshot.pulledAt when real
+      // snapshots/links exist — that's the honest "actually pulled" signal; otherwise
+      // fall back to the raw field, preserving existing behavior.
+      const latestSnapshotAt = c.snapshots.reduce<Date | null>(
+        (latest, snap) => (latest == null || snap.pulledAt > latest ? snap.pulledAt : latest),
+        null,
+      );
+      return {
+        id: c.id,
+        direction: c.direction,
+        lastPulledAt: latestSnapshotAt ?? c.lastPulledAt,
+        authRef: c.authRef,
+        snapshotCount: c.snapshots.length,
+        linkCount: c.links.length,
+      };
+    }),
   }));
 }
 export const getConnectionsView = () => buildConnectionsView(db());

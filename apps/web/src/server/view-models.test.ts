@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { makeTestDb } from "@pma/db/src/testing/test-db.js";
 import { seedMethodologies } from "@pma/db/prisma/seed-methodologies.js";
 import { seedPoc } from "@pma/db/prisma/seed-poc.js";
-import { buildPortfolioView, buildPrioritizeView, buildDoraView } from "./view-models.js";
+import { buildPortfolioView, buildPrioritizeView, buildDoraView, buildIntelView } from "./view-models.js";
 
 test("portfolio view surfaces Sam's cross-tool overallocation", async () => {
   const { prisma, cleanup } = await makeTestDb();
@@ -39,3 +39,19 @@ test("dora view computes CFR from rolled-back prod deploys", async () => {
     expect(vm.changeFailureRate).toBeGreaterThan(0);
   } finally { await cleanup(); }
 }, 30000);
+
+test("intel view goes live after warming (real tier distribution + tokens saved)", async () => {
+  const { prisma, cleanup } = await makeTestDb();
+  try {
+    await seedMethodologies(prisma);
+    await seedPoc(prisma);
+    const { warmIntelligence } = await import("./ai/warm-intelligence.js");
+    await warmIntelligence(prisma);
+    const vm = await buildIntelView(prisma);
+    expect(vm.hasLiveData).toBe(true);
+    expect(vm.tokensSaved).toBeGreaterThan(0);
+    const det = vm.tiers.find((t) => t.name === "deterministic")!;
+    expect(det.count).toBeGreaterThan(0);
+    expect(vm.tiers.reduce((s, t) => s + t.pct, 0)).toBeGreaterThan(99); // ~100%
+  } finally { await cleanup(); }
+}, 60000);

@@ -43,9 +43,17 @@ function SourceCard({ label, kind, system }: { label: string; kind: string; syst
         </div>
       </div>
       {connection ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--teal)", fontWeight: 600 }}>
-          <span className="live" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--teal3)" }} />
-          Read-only · pulled {timeAgo(connection.lastPulledAt)}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--teal)", fontWeight: 600 }}>
+            <span className="live" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--teal3)" }} />
+            Read-only · pulled {timeAgo(connection.lastPulledAt)}
+          </div>
+          {connection.snapshotCount > 0 ? (
+            <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>
+              {connection.snapshotCount} snapshot{connection.snapshotCount === 1 ? "" : "s"} ingested
+              {connection.linkCount > 0 ? ` · ${connection.linkCount} linked` : ""}
+            </div>
+          ) : null}
         </div>
       ) : (
         <button className="ghost" style={{ width: "100%" }}>
