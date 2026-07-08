@@ -6,3 +6,6 @@ export * from "./domain/events/work-item-events.js";
 export * from "./domain/workitem/work-item.js";
 export * from "./domain/workitem/work-item-tree.js";
 export * from "./domain/methodology/config.js";
+export * from "./domain/metrics/metrics-strategy.js";
+export * from "./domain/metrics/velocity-metrics.js";
+export * from "./domain/metrics/earned-value-metrics.js";

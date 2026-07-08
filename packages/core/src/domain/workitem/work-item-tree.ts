@@ -40,6 +40,15 @@ export class WorkItemTree {
     return out;
   }
 
+  leavesOf(id: WorkItemId): WorkItem[] {
+    const kids = this.childrenOf(id);
+    if (kids.length === 0) {
+      const self = this.byId.get(id);
+      return self ? [self] : [];
+    }
+    return kids.flatMap((k) => this.leavesOf(k.id));
+  }
+
   rolledUpEstimate(id: WorkItemId): number {
     const self = this.byId.get(id);
     const kids = this.childrenOf(id);
