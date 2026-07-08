@@ -12,7 +12,10 @@ import {
   type DriverName,
   type Trend,
 } from "@pma/core";
+import type { AIPort } from "@pma/core";
+import Anthropic from "@anthropic-ai/sdk";
 import { TemplateAIPort } from "./template-ai-port.js";
+import { ClaudeAIPort } from "./claude-ai-port.js";
 import { PrismaAICacheStore, logAiTask } from "./prisma-ai-store.js";
 import { ResolutionLadder } from "./resolution-ladder.js";
 import { persistFeatures } from "./feature-persistence.js";
@@ -20,9 +23,23 @@ import { persistFeatures } from "./feature-persistence.js";
 /** Manager display name for the daily brief — no per-user account model exists yet (matches view-models.ts). */
 const MANAGER_NAME = "Alex";
 
+/**
+ * The AIPort delegate behind the resolution ladder: the live Claude adapter when an
+ * ANTHROPIC_API_KEY is present (falling back to the deterministic template per-task on
+ * any failure), otherwise the deterministic template alone. Keyless installs stay fully
+ * functional; a key upgrades the generative tail to real Claude and lights up the
+ * llm tier on the Intelligence page.
+ */
+function delegateFor(): AIPort {
+  const template = new TemplateAIPort();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return template;
+  return new ClaudeAIPort(new Anthropic({ apiKey }), template);
+}
+
 /** Wires the Prisma-backed cache store behind the resolution ladder for app use. */
 export function aiPort(prisma: PrismaClient): ResolutionLadder {
-  return new ResolutionLadder(new TemplateAIPort(), new PrismaAICacheStore(prisma));
+  return new ResolutionLadder(delegateFor(), new PrismaAICacheStore(prisma));
 }
 
 export interface WarmIntelligenceResult {

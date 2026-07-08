@@ -11,6 +11,7 @@
     "warm": "tsx src/server/warm.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@pma/contracts": "workspace:*",
     "@pma/core": "workspace:*",
     "@pma/db": "workspace:*",
