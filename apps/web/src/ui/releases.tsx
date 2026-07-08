@@ -49,9 +49,9 @@ export function Releases({ view }: { view: ReleasesViewModel }) {
               </Chip>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              {r.environments.map((e) => (
+              {r.environments.map((e, i) => (
                 <div
-                  key={e.environment}
+                  key={`${e.environment}-${i}`}
                   style={{ flex: 1, border: "1px solid var(--line)", borderRadius: 9, padding: "10px 12px" }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
