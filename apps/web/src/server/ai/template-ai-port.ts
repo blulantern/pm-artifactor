@@ -33,7 +33,7 @@ export class TemplateAIPort implements AIPort {
       ranked_action_ids: actions.map((a) => a.id),
       tips: high.slice(0, 3).map((a) => a.text),
     };
-    const grounded = [...new Set(actions.flatMap((a) => [a.id, ...(a.refs ?? [])]))];
+    const grounded = [...new Set([input.date, ...actions.flatMap((a) => [a.id, ...(a.refs ?? [])])])];
     return { output, groundedOn: grounded, confidence: 0.9 };
   }
 
@@ -58,6 +58,7 @@ export class TemplateAIPort implements AIPort {
   }
 
   private emailDigest(input: EmailInput): AIResult {
+    if (input.messages.length === 0) throw new Error("email.digest requires at least one message");
     const items = input.messages.map((m) => ({
       kind: classify(m.subject, m.snippet),
       summary: m.snippet,
