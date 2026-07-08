@@ -335,11 +335,11 @@ export async function buildTeamView(prisma: PrismaClient) {
     include: { allocations: true, skillObservations: true, oneOnOnes: true, team: true },
     orderBy: { name: "asc" },
   });
-  const allAllocations = people.flatMap((p) => p.allocations.map((a) => ({ personId: p.name, pct: a.pct, source: a.sourceLabel ?? "?" })));
-  const loadByName = new Map<string, PersonLoad>(computeLoads(allAllocations, NOW()).result.map((l) => [l.personId, l]));
+  const allAllocations = people.flatMap((p) => p.allocations.map((a) => ({ personId: p.id, pct: a.pct, source: a.sourceLabel ?? "?" })));
+  const loadById = new Map<string, PersonLoad>(computeLoads(allAllocations, NOW()).result.map((l) => [l.personId, l]));
 
   return people.map((p) => {
-    const load = loadByName.get(p.name);
+    const load = loadById.get(p.id);
     const lastOneOnOne = p.oneOnOnes.reduce<Date | null>((latest, o) => (latest == null || o.metOn > latest ? o.metOn : latest), null);
     return {
       id: p.id,
@@ -370,7 +370,7 @@ export async function buildPersonView(prisma: PrismaClient, id: string) {
     },
   });
   const load = computeLoads(
-    person.allocations.map((a) => ({ personId: person.name, pct: a.pct, source: a.sourceLabel ?? "?" })),
+    person.allocations.map((a) => ({ personId: person.id, pct: a.pct, source: a.sourceLabel ?? "?" })),
     NOW(),
   ).result[0];
 

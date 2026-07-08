@@ -55,3 +55,21 @@ test("intel view goes live after warming (real tier distribution + tokens saved)
     expect(vm.tiers.reduce((s, t) => s + t.pct, 0)).toBeGreaterThan(99); // ~100%
   } finally { await cleanup(); }
 }, 60000);
+
+test("team view keys capacity by person id — two same-named people do not merge", async () => {
+  const { prisma, cleanup } = await makeTestDb();
+  try {
+    const org = await prisma.organization.create({ data: { name: "Org" } });
+    // Two distinct people who happen to share a display name.
+    const a = await prisma.person.create({ data: { organizationId: org.id, name: "Alex Kim", email: "a@x.com" } });
+    const b = await prisma.person.create({ data: { organizationId: org.id, name: "Alex Kim", email: "b@x.com" } });
+    await prisma.allocation.create({ data: { personId: a.id, ownerType: "project", ownerId: "p", pct: 40, sourceLabel: "Jira" } });
+    await prisma.allocation.create({ data: { personId: b.id, ownerType: "project", ownerId: "p", pct: 90, sourceLabel: "Jira" } });
+    const { buildTeamView } = await import("./view-models.js");
+    const vm = await buildTeamView(prisma);
+    const rows = vm.filter((r) => r.name === "Alex Kim");
+    expect(rows).toHaveLength(2);
+    // If keyed by name, both would show the merged 130%. Keyed by id, each is distinct.
+    expect(rows.map((r) => r.totalPct).sort((x, y) => x - y)).toEqual([40, 90]);
+  } finally { await cleanup(); }
+}, 30000);
