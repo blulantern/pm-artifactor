@@ -15,3 +15,8 @@ export * from "./domain/methodology/methodology-profile.js";
 export * from "./domain/methodology/scrum-profile.js";
 export * from "./domain/methodology/waterfall-profile.js";
 export * from "./domain/methodology/methodology-registry.js";
+export * from "./ports/repository.js";
+export * from "./ports/event-bus.js";
+export * from "./ports/integration-ports.js";
+export * from "./ports/ai-port.js";
+export * from "./ports/system-ports.js";
