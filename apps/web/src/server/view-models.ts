@@ -18,6 +18,13 @@ import { db } from "./db.js";
 
 const NOW = () => new Date();
 
+/**
+ * A program's health rolls up as the mean of its projects' health composites — a distinct
+ * signal from benefit realization. A program with no projects yet has no rolled-up health (0).
+ */
+const rollUpHealth = (projects: { health: number }[]): number =>
+  projects.length ? Math.round(projects.reduce((s, p) => s + p.health, 0) / projects.length) : 0;
+
 /** Manager display name for the daily brief — no per-user account model exists yet. */
 const MANAGER_NAME = "Alex";
 /** Default cadence assumed for 1:1s absent an explicit per-person cadence field. */
@@ -26,7 +33,9 @@ const DEFAULT_ONE_ON_ONE_CADENCE_DAYS = 14;
 // ============================== Portfolio ==============================
 
 export async function buildPortfolioView(prisma: PrismaClient) {
-  const portfolio = await prisma.portfolio.findFirst({ include: { programs: true } });
+  const portfolio = await prisma.portfolio.findFirst({
+    include: { programs: { include: { projects: { select: { health: true } } } } },
+  });
   const allocations = await prisma.allocation.findMany({ include: { person: true } });
   // Key capacity loads by the stable person id, not the display name — two people can share
   // a name, and the name is presentation, not identity. Keep a name lookup for display.
@@ -38,9 +47,10 @@ export async function buildPortfolioView(prisma: PrismaClient) {
   const objectives = await prisma.strategicObjective.findMany();
   return {
     name: portfolio?.name ?? "Portfolio",
-    health: portfolio
+    // Portfolio health rolls up from its programs' (project-derived) health, not from benefit.
+    health: portfolio && portfolio.programs.length
       ? Math.round(
-          (portfolio.programs.reduce((s, p) => s + (p.benefitPct ?? 0), 0) / Math.max(portfolio.programs.length, 1)),
+          portfolio.programs.reduce((s, p) => s + rollUpHealth(p.projects), 0) / portfolio.programs.length,
         )
       : 0,
     invest: portfolio?.totalInvestment ?? 0,
@@ -49,7 +59,7 @@ export async function buildPortfolioView(prisma: PrismaClient) {
       portfolio?.programs.map((p) => ({
         id: p.id,
         name: p.name,
-        health: p.benefitPct ?? 0,
+        health: rollUpHealth(p.projects),
         status: p.status,
         benefitPct: p.benefitPct ?? 0,
       })) ?? [],
@@ -184,12 +194,8 @@ export async function buildProgramsView(prisma: PrismaClient) {
     portfolio: p.portfolio.name,
     status: p.status,
     methodology: p.methodology ?? "",
-    // Program health rolls up from its projects — distinct from benefitPct, which is the
-    // program's own benefit-realization metric. Previously both fields read from benefitPct,
-    // making the Programs page render identical numbers.
-    health: p.projects.length
-      ? Math.round(p.projects.reduce((s, proj) => s + proj.health, 0) / p.projects.length)
-      : 0,
+    // Program health rolls up from its projects (distinct from benefitPct).
+    health: rollUpHealth(p.projects),
     benefitPct: p.benefitPct ?? 0,
     targetEnd: p.targetEnd,
     projectCount: p.projects.length,
