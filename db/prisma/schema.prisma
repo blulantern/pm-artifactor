@@ -6,3 +6,633 @@ datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
+
+// ============================== Strategy & Portfolio ==============================
+model Organization {
+  id         String               @id @default(cuid())
+  name       String
+  tier       String?
+  portfolios Portfolio[]
+  objectives StrategicObjective[]
+  people     Person[]
+  teams      Team[]
+}
+
+model Portfolio {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  name            String
+  vision          String?
+  status          String       @default("active")
+  totalInvestment Float?
+  benefitRealized Float?
+  programs        Program[]
+  projects        Project[]
+}
+
+model StrategicObjective {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  title            String
+  horizon          String?
+  measureOfSuccess String?
+  weightPct        Float? // portfolio investment weight, for the strategic-alignment panel
+}
+
+// ============================== Program & Benefits ==============================
+model Program {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+  name        String
+  status      String    @default("planning") // planning | on_track | at_risk | done
+  methodology String? // display label e.g. SAFe | Hybrid
+  benefitPct  Float? // realization %
+  targetEnd   DateTime?
+  benefits    Benefit[]
+  projects    Project[]
+}
+
+model Benefit {
+  id                String  @id @default(cuid())
+  programId         String
+  program           Program @relation(fields: [programId], references: [id])
+  name              String
+  metric            String?
+  baselineValue     Float?
+  targetValue       Float?
+  realizationStatus String  @default("planned")
+}
+
+// ============================== Project & Lifecycle ==============================
+model Project {
+  id            String      @id @default(cuid())
+  portfolioId   String
+  portfolio     Portfolio   @relation(fields: [portfolioId], references: [id])
+  programId     String?
+  program       Program?    @relation(fields: [programId], references: [id])
+  methodologyId String
+  methodology   Methodology @relation(fields: [methodologyId], references: [id])
+  name          String
+  status        String      @default("planning") // on_track | at_risk | done
+  health        Int         @default(0) // 0-100 composite (materialized rollup)
+  nextMilestone String? // display: "Sprint 14 ends Mar 18"
+  sourceLabel   String? // display: Jira | Azure DevOps | GitHub
+  spi           Float?
+  cpi           Float?
+  startDate     DateTime?
+  targetEndDate DateTime?
+  phases        Phase[]
+  workItems     WorkItem[]
+  cadences      Cadence[]
+  backlogs      Backlog[]
+  releases      Release[]
+  raidItems     RaidItem[]
+  baselines     Baseline[]
+}
+
+model Phase {
+  id               String  @id @default(cuid())
+  projectId        String
+  project          Project @relation(fields: [projectId], references: [id])
+  lifecyclePhaseId String?
+  name             String
+  sequence         Int
+  status           String  @default("not_started")
+  gate             Gate?
+}
+
+model Gate {
+  id           String    @id @default(cuid())
+  phaseId      String    @unique
+  phase        Phase     @relation(fields: [phaseId], references: [id])
+  name         String
+  decision     String    @default("pending") // pending | go | no_go | conditional
+  decisionDate DateTime?
+}
+
+// ============================== Work Execution (polymorphic core) ==============================
+model WorkItem {
+  id                 String         @id @default(cuid())
+  projectId          String
+  project            Project        @relation(fields: [projectId], references: [id])
+  parentId           String?
+  parent             WorkItem?      @relation("WorkItemTree", fields: [parentId], references: [id])
+  children           WorkItem[]     @relation("WorkItemTree")
+  workItemTypeId     String
+  workItemType       WorkItemType   @relation(fields: [workItemTypeId], references: [id])
+  cadenceId          String?
+  cadence            Cadence?       @relation(fields: [cadenceId], references: [id])
+  workflowStateId    String?
+  assigneeId         String?
+  assignee           Person?        @relation(fields: [assigneeId], references: [id])
+  title              String
+  rank               Int            @default(0)
+  estimate           Float?
+  estimateUnit       String? // points | hours | days | tshirt
+  complexityBand     String? // low | med | high
+  riskBand           String? // low | med | high
+  status             String         @default("todo") // todo | in_progress | done | blocked
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  lastStatusChangeAt DateTime?
+  predecessors       Dependency[]   @relation("Predecessor")
+  successors         Dependency[]   @relation("Successor")
+  backlogItems       BacklogItem[]
+  externalLinks      ExternalLink[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([cadenceId])
+}
+
+model Dependency {
+  id            String   @id @default(cuid())
+  predecessorId String
+  predecessor   WorkItem @relation("Predecessor", fields: [predecessorId], references: [id])
+  successorId   String
+  successor     WorkItem @relation("Successor", fields: [successorId], references: [id])
+  type          String // FS | SS | FF | SF | BLOCKS | RELATES
+  lagDays       Int      @default(0)
+}
+
+model Cadence {
+  id              String     @id @default(cuid())
+  projectId       String
+  project         Project    @relation(fields: [projectId], references: [id])
+  kind            String // sprint | iteration | pi | phase_window | release
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  goal            String?
+  capacity        Float?
+  committedPoints Float?
+  workItems       WorkItem[]
+  capacities      Capacity[]
+}
+
+model Backlog {
+  id        String        @id @default(cuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id])
+  kind      String // product | sprint | wbs | improvement
+  items     BacklogItem[]
+}
+
+model BacklogItem {
+  id                    String   @id @default(cuid())
+  backlogId             String
+  backlog               Backlog  @relation(fields: [backlogId], references: [id])
+  workItemId            String
+  workItem              WorkItem @relation(fields: [workItemId], references: [id])
+  rank                  Int
+  // WSJF inputs (human judgments; nullable)
+  wsjfUserBusinessValue Float?
+  wsjfTimeCriticality   Float?
+  wsjfRiskReduction     Float?
+  // RICE inputs
+  riceReach             Float?
+  riceImpact            Float?
+  riceConfidence        Float?
+  riceEffort            Float?
+}
+
+// ============================== Methodology config (methodology-as-data) ==============================
+model Methodology {
+  id            String               @id @default(cuid())
+  key           String               @unique // SCRUM | SAFE | WATERFALL | DMAIC
+  name          String
+  family        String // agile | traditional | lean | hybrid
+  isIterative   Boolean              @default(true)
+  projects      Project[]
+  workItemTypes WorkItemType[]
+  lifecycles    Lifecycle[]
+  workflows     WorkflowDefinition[]
+}
+
+model Lifecycle {
+  id            String           @id @default(cuid())
+  methodologyId String
+  methodology   Methodology      @relation(fields: [methodologyId], references: [id])
+  name          String
+  phases        LifecyclePhase[]
+}
+
+model LifecyclePhase {
+  id           String    @id @default(cuid())
+  lifecycleId  String
+  lifecycle    Lifecycle @relation(fields: [lifecycleId], references: [id])
+  name         String
+  sequence     Int
+  gateRequired Boolean   @default(false)
+}
+
+model WorkItemType {
+  id                  String      @id @default(cuid())
+  methodologyId       String
+  methodology         Methodology @relation(fields: [methodologyId], references: [id])
+  name                String // Epic | Story | Task | Work Package | Activity | Charter ...
+  hierarchyLevel      Int
+  defaultEstimateUnit String?
+  workItems           WorkItem[]
+}
+
+model WorkflowDefinition {
+  id            String          @id @default(cuid())
+  methodologyId String
+  methodology   Methodology     @relation(fields: [methodologyId], references: [id])
+  appliesToType String?
+  states        WorkflowState[]
+}
+
+model WorkflowState {
+  id                   String             @id @default(cuid())
+  workflowDefinitionId String
+  workflowDefinition   WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id])
+  name                 String
+  category             String // todo | in_progress | done | blocked
+  order                Int
+  fromTransitions      StateTransition[]  @relation("FromState")
+  toTransitions        StateTransition[]  @relation("ToState")
+}
+
+model StateTransition {
+  id               String        @id @default(cuid())
+  fromStateId      String
+  fromState        WorkflowState @relation("FromState", fields: [fromStateId], references: [id])
+  toStateId        String
+  toState          WorkflowState @relation("ToState", fields: [toStateId], references: [id])
+  name             String
+  requiresApproval Boolean       @default(false)
+}
+
+// ============================== People, financials, measurement ==============================
+model Person {
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  name              String
+  email             String             @unique
+  role              String?
+  active            Boolean            @default(true)
+  flowNote          String? // display: "high-complexity backend"
+  teamId            String?
+  team              Team?              @relation(fields: [teamId], references: [id])
+  workItems         WorkItem[]
+  allocations       Allocation[]
+  teammateNotes     TeammateNote[]
+  skillObservations SkillObservation[]
+  velocityInsights  VelocityInsight[]
+  oneOnOnes         OneOnOne[]
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  members        Person[]
+  capacities     Capacity[]
+}
+
+model Allocation {
+  id          String    @id @default(cuid())
+  personId    String
+  person      Person    @relation(fields: [personId], references: [id])
+  ownerType   String // project | program | portfolio | work_item
+  ownerId     String
+  pct         Float
+  sourceLabel String? // which tool this allocation came from (for cross-tool truth)
+  fromDate    DateTime?
+  toDate      DateTime?
+}
+
+model Capacity {
+  id             String   @id @default(cuid())
+  teamId         String
+  team           Team     @relation(fields: [teamId], references: [id])
+  cadenceId      String?
+  cadence        Cadence? @relation(fields: [cadenceId], references: [id])
+  availableUnits Float
+}
+
+model Budget {
+  id          String      @id @default(cuid())
+  ownerType   String
+  ownerId     String
+  amount      Float
+  period      String?
+  costEntries CostEntry[]
+}
+
+model CostEntry {
+  id         String    @id @default(cuid())
+  budgetId   String
+  budget     Budget    @relation(fields: [budgetId], references: [id])
+  category   String
+  amount     Float
+  incurredOn DateTime?
+}
+
+model Baseline {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  type       String // schedule | cost | scope
+  snapshot   String // JSON as text
+  capturedOn DateTime @default(now())
+}
+
+model RaidItem {
+  id          String  @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id])
+  category    String // risk | assumption | issue | dependency
+  title       String
+  probability Int?
+  impact      Int?
+  status      String  @default("open")
+}
+
+// ============================== Release & Deployment ==============================
+model Release {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id])
+  version     String
+  name        String?
+  status      String       @default("planned") // planned | deploying | released
+  targetDate  DateTime?
+  releasedAt  DateTime?
+  deployments Deployment[]
+}
+
+model Environment {
+  id           String       @id @default(cuid())
+  name         String // dev | staging | prod
+  promoteOrder Int
+  deployments  Deployment[]
+}
+
+model Deployment {
+  id              String       @id @default(cuid())
+  releaseId       String
+  release         Release      @relation(fields: [releaseId], references: [id])
+  environmentId   String
+  environment     Environment  @relation(fields: [environmentId], references: [id])
+  status          String // running | success | failed | rolled_back
+  buildRef        String?
+  commitSha       String?
+  rollbackOfId    String?
+  rollbackOf      Deployment?  @relation("Rollback", fields: [rollbackOfId], references: [id])
+  rollbacks       Deployment[] @relation("Rollback")
+  startedAt       DateTime     @default(now())
+  finishedAt      DateTime?
+  leadTimeMinutes Int?
+}
+
+// ============================== Stakeholders ==============================
+model Stakeholder {
+  id               String                @id @default(cuid())
+  name             String
+  org              String?
+  role             String?
+  influence        Int                   @default(3) // 1-5
+  interest         Int                   @default(3) // 1-5
+  stance           String                @default("neutral") // supporter | neutral | skeptic | blocker
+  preferredChannel String?
+  updateCadence    String? // display: "Biweekly · due Thu"
+  nextDue          DateTime?
+  caresAbout       String? // display summary
+  interests        StakeholderInterest[]
+  communications   Communication[]
+}
+
+model StakeholderInterest {
+  id            String      @id @default(cuid())
+  stakeholderId String
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id])
+  ownerType     String // strategic_objective | benefit | program | project | work_item
+  ownerId       String
+  reason        String?
+}
+
+model Communication {
+  id            String      @id @default(cuid())
+  stakeholderId String
+  stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id])
+  channel       String?
+  occurredOn    DateTime?
+  summary       String?
+  nextDue       DateTime?
+}
+
+// ============================== Teammate notes (PM-owned private layer) ==============================
+model TeammateNote {
+  id           String   @id @default(cuid())
+  personId     String
+  person       Person   @relation(fields: [personId], references: [id])
+  category     String // recognition | strength | growth | motivation | goal | general
+  content      String
+  howToSupport String?
+  sensitive    Boolean  @default(false)
+  evidenceRefs String? // JSON array of {type,id} as text
+  updatedAt    DateTime @updatedAt
+}
+
+model SkillObservation {
+  id          String @id @default(cuid())
+  personId    String
+  person      Person @relation(fields: [personId], references: [id])
+  skill       String
+  proficiency Int // 1-5
+  interest    Int // 1-5
+}
+
+model VelocityInsight {
+  id         String  @id @default(cuid())
+  personId   String
+  person     Person  @relation(fields: [personId], references: [id])
+  dimension  String // complexity | effort | risk
+  band       Int // 0-2 (low/med/high)
+  throughput Float
+  caveat     String?
+}
+
+model OneOnOne {
+  id            String   @id @default(cuid())
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id])
+  metOn         DateTime
+  talkingPoints String?
+  followUps     String?
+}
+
+// ============================== Copilot & comms ==============================
+model SuggestedAction {
+  id        String   @id @default(cuid())
+  type      String // sprint_end | complex_check_in | stakeholder_update_due | one_on_one_overdue | gate_deadline | deploy_attention | meeting_prep
+  urgency   String // low | med | high
+  text      String
+  refType   String?
+  refId     String?
+  createdAt DateTime @default(now())
+}
+
+model DailyBrief {
+  id        String   @id @default(cuid())
+  date      DateTime
+  headline  String
+  tips      String // JSON array as text
+  createdAt DateTime @default(now())
+}
+
+model EmailMessage {
+  id         String   @id @default(cuid())
+  threadId   String?
+  subject    String
+  fromEmail  String
+  snippet    String
+  receivedAt DateTime
+  isUnread   Boolean  @default(true)
+  kind       String? // needs_reply | decision | risk | fyi (classification)
+  linkLabel  String? // display: "linked to Ledger Migration"
+}
+
+model CalendarEvent {
+  id         String   @id @default(cuid())
+  title      String
+  start      DateTime
+  end        DateTime
+  isFreeTime Boolean  @default(false)
+  linkLabel  String?
+}
+
+// ============================== Integration (read-only federation) ==============================
+model ExternalSystem {
+  id          String           @id @default(cuid())
+  vendor      String // jira | github | azure_devops | bitbucket | monday | google_calendar | gmail | confluence
+  baseUrl     String?
+  connections SyncConnection[]
+}
+
+model SyncConnection {
+  id               String              @id @default(cuid())
+  externalSystemId String
+  externalSystem   ExternalSystem      @relation(fields: [externalSystemId], references: [id])
+  authRef          String // keychain reference — never the token itself
+  direction        String              @default("inbound") // inbound | outbound | bidirectional
+  lastPulledAt     DateTime?
+  links            ExternalLink[]
+  fieldMappings    FieldMapping[]
+  events           SyncEvent[]
+  snapshots        IngestionSnapshot[]
+}
+
+model ExternalLink {
+  id               String         @id @default(cuid())
+  syncConnectionId String
+  syncConnection   SyncConnection @relation(fields: [syncConnectionId], references: [id])
+  internalType     String
+  internalId       String
+  workItemId       String?
+  workItem         WorkItem?      @relation(fields: [workItemId], references: [id])
+  externalId       String
+  externalUrl      String?
+  lastSyncedAt     DateTime?
+}
+
+model FieldMapping {
+  id               String         @id @default(cuid())
+  syncConnectionId String
+  syncConnection   SyncConnection @relation(fields: [syncConnectionId], references: [id])
+  internalField    String
+  externalField    String
+  transform        String?
+}
+
+model SyncEvent {
+  id               String         @id @default(cuid())
+  syncConnectionId String
+  syncConnection   SyncConnection @relation(fields: [syncConnectionId], references: [id])
+  direction        String
+  status           String
+  payload          String // JSON as text
+  createdAt        DateTime       @default(now())
+}
+
+model IngestionSnapshot {
+  id               String         @id @default(cuid())
+  syncConnectionId String
+  syncConnection   SyncConnection @relation(fields: [syncConnectionId], references: [id])
+  source           String
+  pulledAt         DateTime       @default(now())
+  raw              String // JSON as text (provenance)
+  normalized       Boolean        @default(false)
+}
+
+// ============================== AI / feature store (contracts) ==============================
+model AiTask {
+  id             String   @id @default(cuid())
+  taskType       String
+  inputHash      String
+  output         String // JSON as text
+  groundedOn     String // JSON array of entity ids as text
+  confidence     Float
+  resolutionTier String // exact_cache | semantic_cache | incremental | learned_model | llm | deterministic
+  tokensUsed     Int      @default(0)
+  tokensSaved    Int      @default(0)
+  humanReviewed  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
+
+model AiResultCache {
+  id             String       @id @default(cuid())
+  keyHash        String       @unique
+  taskType       String
+  grain          String?
+  inputHash      String
+  output         String // JSON as text
+  modelVersion   String
+  resolutionTier String
+  tokensUsed     Int          @default(0)
+  tokensSaved    Int          @default(0)
+  hitCount       Int          @default(0)
+  stale          Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  lastUsedAt     DateTime?
+  deps           AiCacheDep[]
+}
+
+model AiCacheDep {
+  id         String        @id @default(cuid())
+  cacheId    String
+  cache      AiResultCache @relation(fields: [cacheId], references: [id])
+  entityType String
+  entityId   String
+  field      String?
+}
+
+model FeatureRecord {
+  id              String   @id @default(cuid())
+  metric          String
+  entityType      String
+  entityId        String
+  value           String // JSON as text (FeatureValue discriminated union)
+  computedAt      DateTime @default(now())
+  deterministicFn String
+  fnVersion       String
+  inputsHash      String?
+}
+
+// ============================== Event outbox (durable local dispatch) ==============================
+model OutboxEntry {
+  id           String    @id @default(cuid())
+  type         String
+  payload      String // JSON as text
+  status       String    @default("pending") // pending | dispatched | failed
+  createdAt    DateTime  @default(now())
+  dispatchedAt DateTime?
+}
