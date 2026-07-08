@@ -29,6 +29,9 @@ importers:
       '@pma/db':
         specifier: workspace:*
         version: link:../../db
+      '@prisma/client':
+        specifier: ^5.22.0
+        version: 5.22.0(prisma@5.22.0)
       next:
         specifier: ^15.0.0
         version: 15.5.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
