@@ -10,3 +10,4 @@ export * from "./domain/metrics/metrics-strategy.js";
 export * from "./domain/metrics/velocity-metrics.js";
 export * from "./domain/metrics/earned-value-metrics.js";
 export * from "./domain/scheduling/scheduling-strategy.js";
+export * from "./domain/workflow/workflow-engine.js";
