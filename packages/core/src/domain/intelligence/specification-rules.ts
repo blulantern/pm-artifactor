@@ -23,7 +23,7 @@ export function runSpecificationRules(snap: CanonicalSnapshot, opts: RuleOptions
   ];
 }
 
-function sprintEnd(snap: CanonicalSnapshot, withinDays: number): SuggestedAction[] {
+export function sprintEnd(snap: CanonicalSnapshot, withinDays: number): SuggestedAction[] {
   return snap.cadences
     .filter((c) => {
       const d = daysBetween(c.endDate, snap.now);
@@ -36,7 +36,7 @@ function sprintEnd(snap: CanonicalSnapshot, withinDays: number): SuggestedAction
     }));
 }
 
-function complexCheckIn(snap: CanonicalSnapshot, quietDays: number): SuggestedAction[] {
+export function complexCheckIn(snap: CanonicalSnapshot, quietDays: number): SuggestedAction[] {
   return snap.complexItems
     .filter((i) => i.daysSinceStatusChange >= quietDays)
     .map((i) => ({
@@ -46,7 +46,7 @@ function complexCheckIn(snap: CanonicalSnapshot, quietDays: number): SuggestedAc
     }));
 }
 
-function stakeholderDue(snap: CanonicalSnapshot, withinDays: number): SuggestedAction[] {
+export function stakeholderDue(snap: CanonicalSnapshot, withinDays: number): SuggestedAction[] {
   return snap.stakeholders
     .filter((s) => s.nextDue != null && daysBetween(s.nextDue, snap.now) >= 0 && daysBetween(s.nextDue, snap.now) <= withinDays)
     .map((s) => ({
@@ -56,7 +56,7 @@ function stakeholderDue(snap: CanonicalSnapshot, withinDays: number): SuggestedA
     }));
 }
 
-function oneOnOneOverdue(snap: CanonicalSnapshot): SuggestedAction[] {
+export function oneOnOneOverdue(snap: CanonicalSnapshot): SuggestedAction[] {
   return snap.oneOnOnes
     .filter((o) => o.lastMet == null || daysBetween(snap.now, o.lastMet) > o.cadenceDays)
     .map((o) => ({
@@ -66,7 +66,7 @@ function oneOnOneOverdue(snap: CanonicalSnapshot): SuggestedAction[] {
     }));
 }
 
-function gateDeadline(snap: CanonicalSnapshot): SuggestedAction[] {
+export function gateDeadline(snap: CanonicalSnapshot): SuggestedAction[] {
   return snap.gates
     .filter((g) => daysBetween(g.deadline, snap.now) >= 0)
     .map((g) => ({
@@ -76,7 +76,7 @@ function gateDeadline(snap: CanonicalSnapshot): SuggestedAction[] {
     }));
 }
 
-function deployAttention(snap: CanonicalSnapshot): SuggestedAction[] {
+export function deployAttention(snap: CanonicalSnapshot): SuggestedAction[] {
   return snap.deployments
     .filter((d) => d.status === "failed" || d.status === "rolled_back")
     .map((d) => ({
@@ -86,7 +86,7 @@ function deployAttention(snap: CanonicalSnapshot): SuggestedAction[] {
     }));
 }
 
-function meetingPrep(snap: CanonicalSnapshot): SuggestedAction[] {
+export function meetingPrep(snap: CanonicalSnapshot): SuggestedAction[] {
   return snap.meetings
     .filter((m) => m.linkLabel != null && daysBetween(m.start, snap.now) >= 0)
     .map((m) => ({
