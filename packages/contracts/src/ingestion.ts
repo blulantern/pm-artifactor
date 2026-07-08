@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Provenance, CanonicalRef } from "./primitives.js";
+import { Provenance, CanonicalRef, IsoDateTime, IsoDate } from "./primitives.js";
 
 export const WorkItemEnvelope = z.object({
   provenance: Provenance,
@@ -16,9 +16,9 @@ export const WorkItemEnvelope = z.object({
   risk_band: z.enum(["low", "med", "high"]).nullable().optional(),
   labels: z.array(z.string()).optional(),
   sprint_external_id: z.string().nullable().optional(),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
-  last_status_change_at: z.string().nullable().optional(),
+  created_at: IsoDateTime.optional(),
+  updated_at: IsoDateTime.optional(),
+  last_status_change_at: IsoDateTime.nullable().optional(),
   links: z.array(CanonicalRef).optional(),
 });
 export type WorkItemEnvelope = z.infer<typeof WorkItemEnvelope>;
@@ -37,8 +37,8 @@ export const SprintEnvelope = z.object({
   provenance: Provenance,
   name: z.string(),
   kind: z.enum(["sprint", "iteration", "pi", "phase_window", "release"]),
-  start_date: z.string(),
-  end_date: z.string(),
+  start_date: IsoDate,
+  end_date: IsoDate,
   goal: z.string().nullable().optional(),
   state: z.enum(["future", "active", "closed"]).optional(),
   committed_points: z.number().nullable().optional(),
@@ -49,11 +49,11 @@ export const DeploymentEnvelope = z.object({
   provenance: Provenance,
   environment: z.enum(["dev", "staging", "prod", "other"]),
   status: z.enum(["running", "success", "failed", "rolled_back"]),
-  started_at: z.string(),
+  started_at: IsoDateTime,
   build_ref: z.string().nullable().optional(),
   commit_sha: z.string().nullable().optional(),
   is_rollback: z.boolean().optional(),
-  finished_at: z.string().nullable().optional(),
+  finished_at: IsoDateTime.nullable().optional(),
   pr_external_ids: z.array(z.string()).optional(),
   work_item_links: z.array(CanonicalRef).optional(),
 });
@@ -62,8 +62,8 @@ export type DeploymentEnvelope = z.infer<typeof DeploymentEnvelope>;
 export const CalendarEventEnvelope = z.object({
   provenance: Provenance,
   title: z.string(),
-  start: z.string(),
-  end: z.string(),
+  start: IsoDateTime,
+  end: IsoDateTime,
   attendee_emails: z.array(z.string().email()).optional(),
   is_free_time: z.boolean().optional(),
   links: z.array(CanonicalRef).optional(),
@@ -76,7 +76,7 @@ export const EmailMessageEnvelope = z.object({
   subject: z.string(),
   from_email: z.string().email(),
   to_emails: z.array(z.string().email()).optional(),
-  received_at: z.string(),
+  received_at: IsoDateTime,
   snippet: z.string(),
   is_unread: z.boolean().optional(),
   links: z.array(CanonicalRef).optional(),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GroundedNumber, EntityId, OutputBase } from "./primitives.js";
+import { GroundedNumber, EntityId, OutputBase, IsoDate } from "./primitives.js";
 import { EmailMessageEnvelope } from "./ingestion.js";
 
 // prioritization.suggest
@@ -11,7 +11,7 @@ export const PrioritizationSuggestInput = z.object({
     estimate: z.number().nullable().optional(),
     linked_benefits: z.array(z.string()).optional(),
     linked_risks: z.array(z.string()).optional(),
-    deadline: z.string().nullable().optional(),
+    deadline: IsoDate.nullable().optional(),
     reach_estimate: z.number().nullable().optional(),
   })),
 });
@@ -25,7 +25,7 @@ export const PrioritizationSuggestOutput = OutputBase.extend({
 
 // daily-brief.compose
 export const DailyBriefComposeInput = z.object({
-  date: z.string(),
+  date: IsoDate,
   manager_name: z.string().optional(),
   suggested_actions: z.array(z.object({
     id: z.string(),

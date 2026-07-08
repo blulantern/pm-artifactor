@@ -26,3 +26,8 @@ test("EmailMessageEnvelope requires subject/from_email/received_at/snippet", () 
   const ok = { provenance: prov, subject: "Ledger", from_email: "a@b.com", received_at: "2026-03-16T00:00:00Z", snippet: "hi" };
   expect(EmailMessageEnvelope.safeParse(ok).success).toBe(true);
 });
+
+test("DeploymentEnvelope rejects a date-only started_at (timestamps must be full datetimes)", () => {
+  const bad = { provenance: prov, environment: "prod", status: "success", started_at: "2026-03-16" };
+  expect(DeploymentEnvelope.safeParse(bad).success).toBe(false);
+});

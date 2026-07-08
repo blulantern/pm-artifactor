@@ -12,6 +12,11 @@ export const INGESTION_SOURCES = [
   "google_calendar", "outlook_calendar", "gmail", "outlook_mail",
 ] as const;
 
+/** ISO-8601 date-time (with optional timezone offset), e.g. `2026-03-16T09:00:00Z`. */
+export const IsoDateTime = z.string().datetime({ offset: true });
+/** ISO-8601 calendar date, e.g. `2026-03-16` (no time component). */
+export const IsoDate = z.string().date();
+
 export const GroundedNumber = z.object({
   value: z.number(),
   source: z.enum(["derived", "suggested"]),
@@ -37,7 +42,7 @@ export const Provenance = z.object({
   source: z.enum(INGESTION_SOURCES),
   external_id: z.string(),
   external_url: z.string().optional(),
-  pulled_at: z.string(),
+  pulled_at: IsoDateTime,
   mode: z.literal("read_only"),
   raw: z.record(z.string(), z.unknown()).optional(),
 });

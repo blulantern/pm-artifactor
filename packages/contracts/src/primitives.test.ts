@@ -17,3 +17,14 @@ test("Provenance pins mode to read_only", () => {
   expect(Provenance.safeParse({ ...base, mode: "read_only" }).success).toBe(true);
   expect(Provenance.safeParse({ ...base, mode: "write" }).success).toBe(false);
 });
+
+test("IsoDateTime accepts full ISO datetimes and rejects date-only/garbage", async () => {
+  const { IsoDateTime, IsoDate } = await import("./index.js");
+  expect(IsoDateTime.safeParse("2026-03-16T09:00:00Z").success).toBe(true);
+  expect(IsoDateTime.safeParse("2026-03-16T09:00:00.000Z").success).toBe(true);
+  expect(IsoDateTime.safeParse("2026-03-16").success).toBe(false); // date-only not a datetime
+  expect(IsoDateTime.safeParse("not a date").success).toBe(false);
+  // IsoDate is the inverse: calendar date only.
+  expect(IsoDate.safeParse("2026-03-16").success).toBe(true);
+  expect(IsoDate.safeParse("2026-03-16T09:00:00Z").success).toBe(false);
+});

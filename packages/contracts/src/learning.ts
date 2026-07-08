@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CACHE_ENTITY_TYPES } from "./primitives.js";
+import { CACHE_ENTITY_TYPES, IsoDateTime } from "./primitives.js";
 
 export const EntityRef = z.object({
   type: z.enum(CACHE_ENTITY_TYPES),
@@ -19,7 +19,7 @@ export const FeatureRecord = z.object({
   metric: z.string(),
   entity: EntityRef,
   value: FeatureValue,
-  computed_at: z.string(),
+  computed_at: IsoDateTime,
   deterministic_fn: z.string(),
   fn_version: z.string(),
   inputs_hash: z.string().nullable().optional(),
@@ -57,5 +57,5 @@ export const ShadowEvaluation = z.object({
   agreement: z.number().min(0).max(1),
   regressions: z.array(z.string()).nullable().optional(),
   recommend_promote: z.boolean().optional(),
-  evaluated_at: z.string(),
+  evaluated_at: IsoDateTime,
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CACHE_ENTITY_TYPES } from "./primitives.js";
+import { CACHE_ENTITY_TYPES, IsoDateTime } from "./primitives.js";
 
 export const ResolutionTier = z.enum([
   "exact_cache", "semantic_cache", "incremental", "learned_model", "llm",
@@ -25,9 +25,9 @@ export const CacheEntry = z.object({
   tokens_used: z.number().int().min(0).optional(),
   tokens_saved: z.number().int().min(0).optional(),
   hit_count: z.number().int().min(0).optional(),
-  created_at: z.string(),
-  last_used_at: z.string().nullable().optional(),
-  expires_at: z.string().nullable().optional(),
+  created_at: IsoDateTime,
+  last_used_at: IsoDateTime.nullable().optional(),
+  expires_at: IsoDateTime.nullable().optional(),
   stale: z.boolean(),
 });
 
@@ -45,7 +45,7 @@ export const AIFeedback = z.object({
   task_type: z.string(),
   verdict: z.enum(["accept", "edit", "dismiss"]),
   edited_output: z.record(z.string(), z.unknown()).nullable().optional(),
-  at: z.string(),
+  at: IsoDateTime,
 });
 
 export const LearnedModel = z.object({
@@ -57,7 +57,7 @@ export const LearnedModel = z.object({
   metrics: z.record(z.string(), z.unknown()).optional(),
   confidence_floor: z.number().min(0).max(1).nullable().optional(),
   active: z.boolean(),
-  trained_at: z.string(),
+  trained_at: IsoDateTime,
 });
 
 export const ResolutionResult = z.object({
