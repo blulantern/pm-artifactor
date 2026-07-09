@@ -16,6 +16,7 @@ import type { AIPort } from "@pma/core";
 import Anthropic from "@anthropic-ai/sdk";
 import { TemplateAIPort } from "./template-ai-port.js";
 import { ClaudeAIPort } from "./claude-ai-port.js";
+import { ClaudeCodeAIPort } from "./claude-code-ai-port.js";
 import { PrismaAICacheStore, logAiTask } from "./prisma-ai-store.js";
 import { ResolutionLadder } from "./resolution-ladder.js";
 import { persistFeatures } from "./feature-persistence.js";
@@ -24,17 +25,42 @@ import { persistFeatures } from "./feature-persistence.js";
 const MANAGER_NAME = "Alex";
 
 /**
- * The AIPort delegate behind the resolution ladder: the live Claude adapter when an
- * ANTHROPIC_API_KEY is present (falling back to the deterministic template per-task on
- * any failure), otherwise the deterministic template alone. Keyless installs stay fully
- * functional; a key upgrades the generative tail to real Claude and lights up the
- * llm tier on the Intelligence page.
+ * Selects the AIPort delegate behind the resolution ladder. The provider is
+ * interchangeable behind the shared AIPort contract:
+ *
+ *   PMA_AI_PROVIDER=template     — deterministic template only (no model calls)
+ *   PMA_AI_PROVIDER=anthropic    — live Claude over the metered Messages API (needs ANTHROPIC_API_KEY)
+ *   PMA_AI_PROVIDER=claude-code  — your logged-in Claude Code CLI (subscription; local/testing only)
+ *   (unset)                      — auto: anthropic when ANTHROPIC_API_KEY is set, else template
+ *
+ * Every provider falls back per-task to the deterministic template on any failure, so
+ * the app stays correct and always grounded regardless of the choice. A new provider
+ * (e.g. OpenAI) is a new GroundedLLMPort subclass added to this switch — nothing else changes.
  */
-function delegateFor(): AIPort {
+export function delegateFor(env: Record<string, string | undefined> = process.env): AIPort {
   const template = new TemplateAIPort();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return template;
-  return new ClaudeAIPort(new Anthropic({ apiKey }), template);
+  const provider = env.PMA_AI_PROVIDER?.toLowerCase();
+
+  switch (provider) {
+    case "template":
+      return template;
+    case "claude-code":
+      return new ClaudeCodeAIPort(template);
+    case "anthropic":
+      return anthropicOrTemplate(template, env);
+    case undefined:
+    case "":
+      // Back-compat default: a key means the metered API, otherwise the template.
+      return env.ANTHROPIC_API_KEY ? anthropicOrTemplate(template, env) : template;
+    default:
+      return template;
+  }
+}
+
+/** Constructs the metered-API adapter when a key is present, else the deterministic template. */
+function anthropicOrTemplate(template: AIPort, env: Record<string, string | undefined>): AIPort {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  return apiKey ? new ClaudeAIPort(new Anthropic({ apiKey }), template) : template;
 }
 
 /** Wires the Prisma-backed cache store behind the resolution ladder for app use. */
