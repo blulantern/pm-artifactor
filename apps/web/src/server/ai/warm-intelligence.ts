@@ -14,9 +14,14 @@ import {
 } from "@pma/core";
 import type { AIPort } from "@pma/core";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { TemplateAIPort } from "./template-ai-port.js";
 import { ClaudeAIPort } from "./claude-ai-port.js";
 import { ClaudeCodeAIPort } from "./claude-code-ai-port.js";
+import { OpenAIAIPort } from "./openai-ai-port.js";
+import { GeminiAIPort } from "./gemini-ai-port.js";
+import { resolveAiConfig, type ResolvedAiConfig } from "./ai-config-store.js";
 import { PrismaAICacheStore, logAiTask } from "./prisma-ai-store.js";
 import { ResolutionLadder } from "./resolution-ladder.js";
 import { persistFeatures } from "./feature-persistence.js";
@@ -25,47 +30,46 @@ import { persistFeatures } from "./feature-persistence.js";
 const MANAGER_NAME = "Alex";
 
 /**
- * Selects the AIPort delegate behind the resolution ladder. The provider is
- * interchangeable behind the shared AIPort contract:
+ * Builds the AIPort delegate behind the resolution ladder from a resolved config.
+ * Every provider is interchangeable behind the shared AIPort contract, and each falls
+ * back per-task to the deterministic template on any failure — so the app stays correct
+ * and always grounded regardless of the choice, or if a selected provider has no key.
  *
- *   PMA_AI_PROVIDER=template     — deterministic template only (no model calls)
- *   PMA_AI_PROVIDER=anthropic    — live Claude over the metered Messages API (needs ANTHROPIC_API_KEY)
- *   PMA_AI_PROVIDER=claude-code  — your logged-in Claude Code CLI (subscription; local/testing only)
- *   (unset)                      — auto: anthropic when ANTHROPIC_API_KEY is set, else template
+ *   template     — deterministic templates, no model calls
+ *   anthropic    — Claude over the metered Messages API (needs an Anthropic key)
+ *   openai       — OpenAI Chat Completions (needs an OpenAI key)
+ *   gemini       — Google Gemini (needs a Gemini key)
+ *   claude-code  — your logged-in Claude Code CLI (subscription; local/dev only)
  *
- * Every provider falls back per-task to the deterministic template on any failure, so
- * the app stays correct and always grounded regardless of the choice. A new provider
- * (e.g. OpenAI) is a new GroundedLLMPort subclass added to this switch — nothing else changes.
+ * Adding a provider is a new GroundedLLMPort subclass plus one case here — nothing else changes.
  */
-export function delegateFor(env: Record<string, string | undefined> = process.env): AIPort {
+export function delegateFor(cfg: ResolvedAiConfig): AIPort {
   const template = new TemplateAIPort();
-  const provider = env.PMA_AI_PROVIDER?.toLowerCase();
-
-  switch (provider) {
-    case "template":
-      return template;
+  const model = cfg.model ?? undefined; // undefined → each adapter's own default
+  switch (cfg.provider) {
     case "claude-code":
       return new ClaudeCodeAIPort(template);
     case "anthropic":
-      return anthropicOrTemplate(template, env);
-    case undefined:
-    case "":
-      // Back-compat default: a key means the metered API, otherwise the template.
-      return env.ANTHROPIC_API_KEY ? anthropicOrTemplate(template, env) : template;
+      return cfg.keys.anthropic
+        ? new ClaudeAIPort(new Anthropic({ apiKey: cfg.keys.anthropic }), template, model)
+        : template;
+    case "openai":
+      return cfg.keys.openai
+        ? new OpenAIAIPort(new OpenAI({ apiKey: cfg.keys.openai }), template, model)
+        : template;
+    case "gemini":
+      return cfg.keys.gemini
+        ? new GeminiAIPort(new GoogleGenAI({ apiKey: cfg.keys.gemini }), template, model)
+        : template;
+    case "template":
     default:
       return template;
   }
 }
 
-/** Constructs the metered-API adapter when a key is present, else the deterministic template. */
-function anthropicOrTemplate(template: AIPort, env: Record<string, string | undefined>): AIPort {
-  const apiKey = env.ANTHROPIC_API_KEY;
-  return apiKey ? new ClaudeAIPort(new Anthropic({ apiKey }), template) : template;
-}
-
 /** Wires the Prisma-backed cache store behind the resolution ladder for app use. */
 export function aiPort(prisma: PrismaClient): ResolutionLadder {
-  return new ResolutionLadder(delegateFor(), new PrismaAICacheStore(prisma));
+  return new ResolutionLadder(delegateFor(resolveAiConfig()), new PrismaAICacheStore(prisma));
 }
 
 export interface WarmIntelligenceResult {

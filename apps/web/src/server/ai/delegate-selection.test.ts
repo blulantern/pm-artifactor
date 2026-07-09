@@ -1,34 +1,41 @@
 import { expect, test } from "vitest";
 import { delegateFor } from "./warm-intelligence.js";
+import type { ResolvedAiConfig } from "./ai-config-store.js";
 import { TemplateAIPort } from "./template-ai-port.js";
 import { ClaudeAIPort } from "./claude-ai-port.js";
 import { ClaudeCodeAIPort } from "./claude-code-ai-port.js";
+import { OpenAIAIPort } from "./openai-ai-port.js";
+import { GeminiAIPort } from "./gemini-ai-port.js";
 
-// delegateFor takes an injected env, so these never touch the real process.env.
-test("PMA_AI_PROVIDER=template forces the deterministic template even with a key", () => {
-  expect(delegateFor({ PMA_AI_PROVIDER: "template", ANTHROPIC_API_KEY: "sk-test" })).toBeInstanceOf(TemplateAIPort);
+const cfg = (over: Partial<ResolvedAiConfig>): ResolvedAiConfig => ({
+  provider: "template",
+  model: null,
+  keys: {},
+  ...over,
 });
 
-test("PMA_AI_PROVIDER=claude-code selects the Claude Code CLI adapter (no key needed)", () => {
-  expect(delegateFor({ PMA_AI_PROVIDER: "claude-code" })).toBeInstanceOf(ClaudeCodeAIPort);
+test("template provider selects the deterministic template", () => {
+  expect(delegateFor(cfg({ provider: "template" }))).toBeInstanceOf(TemplateAIPort);
 });
 
-test("PMA_AI_PROVIDER=anthropic with a key selects the metered API adapter", () => {
-  expect(delegateFor({ PMA_AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "sk-test" })).toBeInstanceOf(ClaudeAIPort);
+test("claude-code selects the CLI adapter (no key needed)", () => {
+  expect(delegateFor(cfg({ provider: "claude-code" }))).toBeInstanceOf(ClaudeCodeAIPort);
 });
 
-test("PMA_AI_PROVIDER=anthropic without a key falls back to the template", () => {
-  expect(delegateFor({ PMA_AI_PROVIDER: "anthropic" })).toBeInstanceOf(TemplateAIPort);
+test("anthropic with a key selects the Claude API adapter", () => {
+  expect(delegateFor(cfg({ provider: "anthropic", keys: { anthropic: "sk-a" } }))).toBeInstanceOf(ClaudeAIPort);
 });
 
-test("unset provider auto-selects the API adapter when a key is present", () => {
-  expect(delegateFor({ ANTHROPIC_API_KEY: "sk-test" })).toBeInstanceOf(ClaudeAIPort);
+test("openai with a key selects the OpenAI adapter", () => {
+  expect(delegateFor(cfg({ provider: "openai", keys: { openai: "sk-o" } }))).toBeInstanceOf(OpenAIAIPort);
 });
 
-test("unset provider with no key auto-selects the template", () => {
-  expect(delegateFor({})).toBeInstanceOf(TemplateAIPort);
+test("gemini with a key selects the Gemini adapter", () => {
+  expect(delegateFor(cfg({ provider: "gemini", keys: { gemini: "sk-g" } }))).toBeInstanceOf(GeminiAIPort);
 });
 
-test("an unknown provider name falls back to the template", () => {
-  expect(delegateFor({ PMA_AI_PROVIDER: "gemini" })).toBeInstanceOf(TemplateAIPort);
+test("a provider selected without its key falls back to the template", () => {
+  expect(delegateFor(cfg({ provider: "openai", keys: {} }))).toBeInstanceOf(TemplateAIPort);
+  expect(delegateFor(cfg({ provider: "gemini", keys: {} }))).toBeInstanceOf(TemplateAIPort);
+  expect(delegateFor(cfg({ provider: "anthropic", keys: {} }))).toBeInstanceOf(TemplateAIPort);
 });

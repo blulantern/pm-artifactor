@@ -8,3 +8,6 @@ coverage/
 *.db-journal
 db/.env
 db/generated/
+
+# Local AI provider config (plaintext keys — never commit)
+.pma/

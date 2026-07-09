@@ -39,6 +39,7 @@ const NAV_GROUPS: { head: string; items: NavItem[] }[] = [
     items: [
       { v: "intel", ic: "❖", l: "Intelligence", href: "/intelligence" },
       { v: "connections", ic: "⊚", l: "Connections", href: "/connections" },
+      { v: "settings", ic: "⚙", l: "AI Settings", href: "/settings" },
       { v: "vault", ic: "⛁", l: "Vault", href: "/vault" },
     ],
   },
