@@ -21,10 +21,10 @@ export async function seedPoc(prisma: PrismaClient): Promise<void> {
   });
 
   const pay = await prisma.program.create({
-    data: { portfolioId: portfolio.id, name: "Payments Modernization", status: "on_track", methodology: "SAFe", benefitPct: 68 },
+    data: { organizationId: org.id, portfolioId: portfolio.id, name: "Payments Modernization", status: "on_track", methodology: "SAFe", benefitPct: 68 },
   });
   const cx = await prisma.program.create({
-    data: { portfolioId: portfolio.id, name: "Customer Experience", status: "at_risk", methodology: "Hybrid", benefitPct: 41 },
+    data: { organizationId: org.id, portfolioId: portfolio.id, name: "Customer Experience", status: "at_risk", methodology: "Hybrid", benefitPct: 41 },
   });
   await prisma.benefit.create({ data: { programId: pay.id, name: "Ledger cost savings", metric: "$", baselineValue: 0, targetValue: 2.5, realizationStatus: "in_progress" } });
 
@@ -33,21 +33,30 @@ export async function seedPoc(prisma: PrismaClient): Promise<void> {
 
   const checkout = await prisma.project.create({
     data: {
-      name: "Mobile Checkout Revamp", portfolioId: portfolio.id, programId: cx.id, methodologyId: scrum.id,
+      name: "Mobile Checkout Revamp", organizationId: org.id, portfolioId: portfolio.id, programId: cx.id, methodologyId: scrum.id,
       status: "at_risk", health: 62, nextMilestone: "Sprint 14 ends Mar 18", sourceLabel: "Jira", spi: 0.92, cpi: 1.03,
     },
   });
   const ledger = await prisma.project.create({
     data: {
-      name: "Ledger Migration", portfolioId: portfolio.id, programId: pay.id, methodologyId: waterfall.id,
+      name: "Ledger Migration", organizationId: org.id, portfolioId: portfolio.id, programId: pay.id, methodologyId: waterfall.id,
       status: "at_risk", health: 70, nextMilestone: "Gate 2 · Mar 22", sourceLabel: "Azure DevOps", spi: 0.88, cpi: 0.96,
     },
   });
   const fraud = await prisma.project.create({
     data: {
-      name: "Fraud Signals v2", portfolioId: portfolio.id, programId: pay.id, methodologyId: scrum.id,
+      name: "Fraud Signals v2", organizationId: org.id, portfolioId: portfolio.id, programId: pay.id, methodologyId: scrum.id,
       status: "on_track", health: 86, nextMilestone: "Continuous", sourceLabel: "GitHub", spi: 1.0, cpi: 1.02,
     },
+  });
+
+  // Standalone-capability demo data (manual foundation)
+  const standaloneProduct = await prisma.product.create({
+    data: { organizationId: org.id, name: "Ledger Platform", status: "active", vision: "One source of truth for spend." },
+  });
+  await prisma.program.create({ data: { organizationId: org.id, name: "Ops Excellence (standalone)", status: "on_track" } });
+  await prisma.project.create({
+    data: { organizationId: org.id, name: "Ledger API (standalone, delivers product)", methodologyId: scrum.id, productId: standaloneProduct.id, status: "on_track" },
   });
 
   // Scrum tree for Checkout: epic -> 3 stories, in Sprint 14.

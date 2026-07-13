@@ -8,7 +8,7 @@ async function seedProjectAndType(prisma: any) {
   const pf = await prisma.portfolio.create({ data: { name: "PF", organizationId: org.id } });
   const meth = await prisma.methodology.create({ data: { key: "SCRUM", name: "Scrum", family: "agile" } });
   const type = await prisma.workItemType.create({ data: { methodologyId: meth.id, name: "Story", hierarchyLevel: 2 } });
-  const proj = await prisma.project.create({ data: { name: "Proj", portfolioId: pf.id, methodologyId: meth.id } });
+  const proj = await prisma.project.create({ data: { name: "Proj", organizationId: org.id, portfolioId: pf.id, methodologyId: meth.id } });
   return { projectId: proj.id as string, typeId: type.id as string };
 }
 

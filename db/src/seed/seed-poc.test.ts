@@ -3,7 +3,7 @@ import { makeTestDb } from "../testing/test-db.js";
 import { seedMethodologies } from "../../prisma/seed-methodologies.js";
 import { seedPoc } from "../../prisma/seed-poc.js";
 
-test("POC seed creates the portfolio, 3 projects, and the cross-tool overallocation case", async () => {
+test("POC seed creates the portfolio, 4 projects (incl. 1 standalone), and the cross-tool overallocation case", async () => {
   const { prisma, cleanup } = await makeTestDb();
   try {
     await seedMethodologies(prisma);
@@ -11,7 +11,7 @@ test("POC seed creates the portfolio, 3 projects, and the cross-tool overallocat
 
     const portfolio = await prisma.portfolio.findFirst({ where: { name: "Digital Banking Portfolio" } });
     expect(portfolio).not.toBeNull();
-    expect(await prisma.project.count()).toBe(3);
+    expect(await prisma.project.count()).toBe(4);
     expect(await prisma.stakeholder.count()).toBe(4);
     expect(await prisma.backlogItem.count()).toBe(5);
 

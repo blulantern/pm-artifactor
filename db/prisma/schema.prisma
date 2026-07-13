@@ -16,19 +16,26 @@ model Organization {
   objectives StrategicObjective[]
   people     Person[]
   teams      Team[]
+  programs   Program[]
+  products   Product[]
+  projects   Project[]
 }
 
 model Portfolio {
-  id              String       @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  name            String
-  vision          String?
-  status          String       @default("active")
-  totalInvestment Float?
-  benefitRealized Float?
-  programs        Program[]
-  projects        Project[]
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  name             String
+  vision           String?
+  status           String       @default("active")
+  totalInvestment  Float?
+  benefitRealized  Float?
+  overriddenFields String?
+  archivedAt       DateTime?
+  updatedAt        DateTime     @updatedAt
+  programs         Program[]
+  products         Product[]
+  projects         Project[]
 }
 
 model StrategicObjective {
@@ -43,16 +50,21 @@ model StrategicObjective {
 
 // ============================== Program & Benefits ==============================
 model Program {
-  id          String    @id @default(cuid())
-  portfolioId String
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
-  name        String
-  status      String    @default("planning") // planning | on_track | at_risk | done
-  methodology String? // display label e.g. SAFe | Hybrid
-  benefitPct  Float? // realization %
-  targetEnd   DateTime?
-  benefits    Benefit[]
-  projects    Project[]
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  portfolioId      String?
+  portfolio        Portfolio?   @relation(fields: [portfolioId], references: [id])
+  name             String
+  status           String       @default("planning") // planning | on_track | at_risk | done
+  methodology      String? // display label e.g. SAFe | Hybrid
+  benefitPct       Float? // realization %
+  targetEnd        DateTime?
+  overriddenFields String? // JSON array of locally-edited fields; null = manual
+  archivedAt       DateTime?
+  updatedAt        DateTime     @updatedAt
+  benefits         Benefit[]
+  projects         Project[]
 }
 
 model Benefit {
@@ -68,29 +80,51 @@ model Benefit {
 
 // ============================== Project & Lifecycle ==============================
 model Project {
-  id            String      @id @default(cuid())
-  portfolioId   String
-  portfolio     Portfolio   @relation(fields: [portfolioId], references: [id])
-  programId     String?
-  program       Program?    @relation(fields: [programId], references: [id])
-  methodologyId String
-  methodology   Methodology @relation(fields: [methodologyId], references: [id])
-  name          String
-  status        String      @default("planning") // on_track | at_risk | done
-  health        Int         @default(0) // 0-100 composite (materialized rollup)
-  nextMilestone String? // display: "Sprint 14 ends Mar 18"
-  sourceLabel   String? // display: Jira | Azure DevOps | GitHub
-  spi           Float?
-  cpi           Float?
-  startDate     DateTime?
-  targetEndDate DateTime?
-  phases        Phase[]
-  workItems     WorkItem[]
-  cadences      Cadence[]
-  backlogs      Backlog[]
-  releases      Release[]
-  raidItems     RaidItem[]
-  baselines     Baseline[]
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  portfolioId      String?
+  portfolio        Portfolio?   @relation(fields: [portfolioId], references: [id])
+  programId        String?
+  program          Program?     @relation(fields: [programId], references: [id])
+  productId        String?
+  product          Product?     @relation(fields: [productId], references: [id])
+  methodologyId    String
+  methodology      Methodology  @relation(fields: [methodologyId], references: [id])
+  name             String
+  status           String       @default("planning") // on_track | at_risk | done
+  health           Int          @default(0) // 0-100 composite (materialized rollup)
+  nextMilestone    String? // display: "Sprint 14 ends Mar 18"
+  sourceLabel      String? // display: Jira | Azure DevOps | GitHub
+  spi              Float?
+  cpi              Float?
+  startDate        DateTime?
+  targetEndDate    DateTime?
+  overriddenFields String?
+  archivedAt       DateTime?
+  updatedAt        DateTime     @updatedAt
+  phases           Phase[]
+  workItems        WorkItem[]
+  cadences         Cadence[]
+  backlogs         Backlog[]
+  releases         Release[]
+  raidItems        RaidItem[]
+  baselines        Baseline[]
+}
+
+model Product {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  portfolioId      String?
+  portfolio        Portfolio?   @relation(fields: [portfolioId], references: [id])
+  name             String
+  status           String       @default("active") // discovery | active | maintenance | sunset
+  vision           String?
+  overriddenFields String?
+  archivedAt       DateTime?
+  updatedAt        DateTime     @updatedAt
+  projects         Project[]
 }
 
 model Phase {
@@ -542,6 +576,7 @@ model ExternalLink {
   externalId       String
   externalUrl      String?
   lastSyncedAt     DateTime?
+  severedAt        DateTime?
 }
 
 model FieldMapping {

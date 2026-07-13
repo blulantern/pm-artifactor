@@ -191,7 +191,7 @@ export async function buildProgramsView(prisma: PrismaClient) {
   return programs.map((p) => ({
     id: p.id,
     name: p.name,
-    portfolio: p.portfolio.name,
+    portfolio: p.portfolio?.name ?? null,
     status: p.status,
     methodology: p.methodology ?? "",
     // Program health rolls up from its projects (distinct from benefitPct).
