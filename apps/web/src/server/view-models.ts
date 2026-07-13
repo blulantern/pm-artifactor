@@ -15,6 +15,7 @@ import {
   type SuggestedAction,
 } from "@pma/core";
 import { db } from "./db.js";
+import { provenanceOf } from "./ppm/entity-links.js";
 
 const NOW = () => new Date();
 
@@ -34,7 +35,8 @@ const DEFAULT_ONE_ON_ONE_CADENCE_DAYS = 14;
 
 export async function buildPortfolioView(prisma: PrismaClient) {
   const portfolio = await prisma.portfolio.findFirst({
-    include: { programs: { include: { projects: { select: { health: true } } } } },
+    where: { archivedAt: null },
+    include: { programs: { where: { archivedAt: null }, include: { projects: { where: { archivedAt: null }, select: { health: true } } } } },
   });
   const allocations = await prisma.allocation.findMany({ include: { person: true } });
   // Key capacity loads by the stable person id, not the display name — two people can share
@@ -46,7 +48,10 @@ export async function buildPortfolioView(prisma: PrismaClient) {
   ).result.map((l) => ({ ...l, name: nameById.get(l.personId) ?? l.personId }));
   const objectives = await prisma.strategicObjective.findMany();
   return {
+    id: portfolio?.id ?? null,
     name: portfolio?.name ?? "Portfolio",
+    status: portfolio?.status ?? "active",
+    vision: portfolio?.vision ?? null,
     // Portfolio health rolls up from its programs' (project-derived) health, not from benefit.
     health: portfolio && portfolio.programs.length
       ? Math.round(
@@ -72,11 +77,19 @@ export const getPortfolioView = () => buildPortfolioView(db());
 // ============================== Projects ==============================
 
 export async function buildProjectsView(prisma: PrismaClient) {
-  const projects = await prisma.project.findMany({ include: { methodology: true }, orderBy: { name: "asc" } });
+  const projects = await prisma.project.findMany({
+    where: { archivedAt: null },
+    include: { methodology: true },
+    orderBy: { name: "asc" },
+  });
   return projects.map((p) => ({
     id: p.id,
     name: p.name,
     methodology: p.methodology.name,
+    methodologyId: p.methodologyId,
+    programId: p.programId,
+    productId: p.productId,
+    portfolioId: p.portfolioId,
     health: p.health,
     status: p.status,
     next: p.nextMilestone ?? "",
@@ -185,13 +198,15 @@ export const getProjectView = (id: string) => buildProjectView(db(), id);
 
 export async function buildProgramsView(prisma: PrismaClient) {
   const programs = await prisma.program.findMany({
-    include: { projects: { select: { id: true, name: true, health: true } }, benefits: true, portfolio: true },
+    where: { archivedAt: null },
+    include: { projects: { where: { archivedAt: null }, select: { id: true, name: true, health: true } }, benefits: true, portfolio: true },
     orderBy: { name: "asc" },
   });
   return programs.map((p) => ({
     id: p.id,
     name: p.name,
     portfolio: p.portfolio?.name ?? null,
+    portfolioId: p.portfolioId,
     status: p.status,
     methodology: p.methodology ?? "",
     // Program health rolls up from its projects (distinct from benefitPct).
@@ -211,6 +226,57 @@ export async function buildProgramsView(prisma: PrismaClient) {
   }));
 }
 export const getProgramsView = () => buildProgramsView(db());
+
+// ============================== Products ==============================
+
+export async function buildProductsView(prisma: PrismaClient) {
+  const rows = await prisma.product.findMany({
+    where: { archivedAt: null },
+    include: { portfolio: true, projects: { where: { archivedAt: null } } },
+    orderBy: { name: "asc" },
+  });
+  const products = await Promise.all(
+    rows.map(async (p) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      portfolioId: p.portfolioId,
+      portfolioName: p.portfolio?.name ?? null,
+      projectCount: p.projects.length,
+      provenance: (await provenanceOf(prisma, { type: "product", id: p.id })).state,
+    })),
+  );
+  return { products };
+}
+export const getProductsView = () => buildProductsView(db());
+
+export async function buildProductView(prisma: PrismaClient, id: string) {
+  const product = await prisma.product.findUniqueOrThrow({
+    where: { id },
+    include: {
+      portfolio: true,
+      projects: { where: { archivedAt: null }, include: { methodology: true }, orderBy: { name: "asc" } },
+    },
+  });
+  const provenance = (await provenanceOf(prisma, { type: "product", id: product.id })).state;
+  return {
+    id: product.id,
+    name: product.name,
+    status: product.status,
+    vision: product.vision ?? null,
+    portfolioId: product.portfolioId,
+    portfolioName: product.portfolio?.name ?? null,
+    provenance,
+    projects: product.projects.map((proj) => ({
+      id: proj.id,
+      name: proj.name,
+      methodology: proj.methodology.name,
+      health: proj.health,
+      status: proj.status,
+    })),
+  };
+}
+export const getProductView = (id: string) => buildProductView(db(), id);
 
 // ============================== Prioritize ==============================
 

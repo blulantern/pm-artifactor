@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Panel, Kpi, Bars, HealthDot } from "./primitives.js";
 import { healthColor } from "./format.js";
+import { EntityFormDisclosure } from "./entity-form-disclosure.js";
+import { DeleteButton } from "./delete-dialog.js";
+import type { ManageOptions } from "@/server/ppm/manage-view.js";
 import type { getPortfolioView } from "@/server/view-models";
 
 type PortfolioViewModel = Awaited<ReturnType<typeof getPortfolioView>>;
@@ -11,7 +14,7 @@ const ALIGNMENT_COLORS = ["var(--teal2)", "var(--teal3)", "var(--blue)", "var(--
 /** Waterfall stage colors — POC uses a fixed 4-stage gradient; we have two real totals. */
 const WATERFALL_COLORS = ["var(--line2)", "var(--win)"];
 
-export function Portfolio({ view }: { view: PortfolioViewModel }) {
+export function Portfolio({ view, options }: { view: PortfolioViewModel; options: ManageOptions }) {
   const waterfall: [string, number][] = [
     ["Investment", view.invest],
     ["Benefit realized", view.benefitRealized],
@@ -26,6 +29,21 @@ export function Portfolio({ view }: { view: PortfolioViewModel }) {
       <div className="h1">{view.name}</div>
       <div className="sub" style={{ margin: "3px 0 16px" }}>
         Everything the portfolio funds, reconciled across tools into one governance view.
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+        <EntityFormDisclosure type="portfolio" options={options} label="＋ New portfolio" openLabel="Cancel" />
+        {view.id ? (
+          <>
+            <EntityFormDisclosure
+              type="portfolio"
+              options={options}
+              label="Edit"
+              initial={{ id: view.id, name: view.name, status: view.status, vision: view.vision }}
+            />
+            <DeleteButton parent={{ type: "portfolio", id: view.id }} label="Delete" />
+          </>
+        ) : null}
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 16 }}>

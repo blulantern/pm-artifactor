@@ -17,6 +17,7 @@ const NAV_GROUPS: { head: string; items: NavItem[] }[] = [
       { v: "portfolio", ic: "◆", l: "Portfolio", href: "/portfolio" },
       { v: "programs", ic: "◈", l: "Programs", href: "/programs", tag: "2" },
       { v: "projects", ic: "▤", l: "Projects", href: "/projects", tag: "3" },
+      { v: "products", ic: "▧", l: "Products", href: "/products" },
       { v: "prioritize", ic: "⇅", l: "Prioritize", href: "/prioritize" },
     ],
   },

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Tag, Bars, Eyebrow } from "./primitives.js";
 import { healthColor } from "./format.js";
+import { EntityFormDisclosure } from "./entity-form-disclosure.js";
+import { DeleteButton } from "./delete-dialog.js";
+import type { ManageOptions } from "@/server/ppm/manage-view.js";
 import type { getProgramsView } from "@/server/view-models";
 
 type ProgramsViewModel = Awaited<ReturnType<typeof getProgramsView>>;
@@ -15,12 +18,16 @@ const DASHBOARD_PANELS = [
   "Methodology-translated Roadmap",
 ];
 
-export function Programs({ view }: { view: ProgramsViewModel }) {
+export function Programs({ view, options }: { view: ProgramsViewModel; options: ManageOptions }) {
   return (
     <div className="view">
       <div className="h1">Programs</div>
       <div className="sub" style={{ margin: "3px 0 16px" }}>
         Benefit-facing coordination. Each rolls up its projects and owns its benefits.
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <EntityFormDisclosure type="program" options={options} label="＋ New program" openLabel="Cancel" />
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -70,6 +77,25 @@ export function Programs({ view }: { view: ProgramsViewModel }) {
                   </button>
                 </Link>
               ))}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                marginTop: 14,
+                paddingTop: 12,
+                borderTop: "1px solid var(--line)",
+              }}
+            >
+              <EntityFormDisclosure
+                type="program"
+                options={options}
+                label="Edit"
+                initial={{ id: p.id, name: p.name, status: p.status, portfolioId: p.portfolioId }}
+              />
+              <DeleteButton parent={{ type: "program", id: p.id }} label="Delete" />
             </div>
           </div>
         ))}
