@@ -60,14 +60,20 @@ export async function buildPortfolioView(prisma: PrismaClient) {
       : 0,
     invest: portfolio?.totalInvestment ?? 0,
     benefitRealized: portfolio?.benefitRealized ?? 0,
-    programs:
-      portfolio?.programs.map((p) => ({
+    programs: await Promise.all(
+      (portfolio?.programs ?? []).map(async (p) => ({
         id: p.id,
         name: p.name,
         health: rollUpHealth(p.projects),
         status: p.status,
         benefitPct: p.benefitPct ?? 0,
-      })) ?? [],
+        // Fields the core `segment` filter/sort consumes on the Portfolio health matrix. These
+        // programs are, by definition, placed under this portfolio → hasParent is always true.
+        provenance: (await provenanceOf(prisma, { type: "program", id: p.id })).state,
+        hasParent: true,
+        updatedAt: p.updatedAt.toISOString(),
+      })),
+    ),
     loads,
     objectives: objectives.map((o) => ({ title: o.title, weightPct: o.weightPct ?? 0 })),
   };
@@ -82,21 +88,28 @@ export async function buildProjectsView(prisma: PrismaClient) {
     include: { methodology: true },
     orderBy: { name: "asc" },
   });
-  return projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    methodology: p.methodology.name,
-    methodologyId: p.methodologyId,
-    programId: p.programId,
-    productId: p.productId,
-    portfolioId: p.portfolioId,
-    health: p.health,
-    status: p.status,
-    next: p.nextMilestone ?? "",
-    source: p.sourceLabel ?? "",
-    spi: p.spi ?? null,
-    cpi: p.cpi ?? null,
-  }));
+  return Promise.all(
+    projects.map(async (p) => ({
+      id: p.id,
+      name: p.name,
+      methodology: p.methodology.name,
+      methodologyId: p.methodologyId,
+      programId: p.programId,
+      productId: p.productId,
+      portfolioId: p.portfolioId,
+      health: p.health,
+      status: p.status,
+      next: p.nextMilestone ?? "",
+      source: p.sourceLabel ?? "",
+      spi: p.spi ?? null,
+      cpi: p.cpi ?? null,
+      // Fields the core `segment` filter/sort consumes on the Projects dashboard. A project is
+      // "placed" when it hangs off any spine parent (portfolio, program, or product).
+      provenance: (await provenanceOf(prisma, { type: "project", id: p.id })).state,
+      hasParent: p.portfolioId != null || p.programId != null || p.productId != null,
+      updatedAt: p.updatedAt.toISOString(),
+    })),
+  );
 }
 export const getProjectsView = () => buildProjectsView(db());
 
@@ -202,28 +215,34 @@ export async function buildProgramsView(prisma: PrismaClient) {
     include: { projects: { where: { archivedAt: null }, select: { id: true, name: true, health: true } }, benefits: true, portfolio: true },
     orderBy: { name: "asc" },
   });
-  return programs.map((p) => ({
-    id: p.id,
-    name: p.name,
-    portfolio: p.portfolio?.name ?? null,
-    portfolioId: p.portfolioId,
-    status: p.status,
-    methodology: p.methodology ?? "",
-    // Program health rolls up from its projects (distinct from benefitPct).
-    health: rollUpHealth(p.projects),
-    benefitPct: p.benefitPct ?? 0,
-    targetEnd: p.targetEnd,
-    projectCount: p.projects.length,
-    projects: p.projects.map((proj) => ({ id: proj.id, name: proj.name })),
-    benefits: p.benefits.map((b) => ({
-      id: b.id,
-      name: b.name,
-      metric: b.metric ?? "",
-      baselineValue: b.baselineValue ?? null,
-      targetValue: b.targetValue ?? null,
-      realizationStatus: b.realizationStatus,
+  return Promise.all(
+    programs.map(async (p) => ({
+      id: p.id,
+      name: p.name,
+      portfolio: p.portfolio?.name ?? null,
+      portfolioId: p.portfolioId,
+      status: p.status,
+      methodology: p.methodology ?? "",
+      // Program health rolls up from its projects (distinct from benefitPct).
+      health: rollUpHealth(p.projects),
+      benefitPct: p.benefitPct ?? 0,
+      targetEnd: p.targetEnd,
+      projectCount: p.projects.length,
+      // Fields the core `segment` filter/sort consumes on the Programs dashboard.
+      provenance: (await provenanceOf(prisma, { type: "program", id: p.id })).state,
+      hasParent: p.portfolioId != null,
+      updatedAt: p.updatedAt.toISOString(),
+      projects: p.projects.map((proj) => ({ id: proj.id, name: proj.name })),
+      benefits: p.benefits.map((b) => ({
+        id: b.id,
+        name: b.name,
+        metric: b.metric ?? "",
+        baselineValue: b.baselineValue ?? null,
+        targetValue: b.targetValue ?? null,
+        realizationStatus: b.realizationStatus,
+      })),
     })),
-  }));
+  );
 }
 export const getProgramsView = () => buildProgramsView(db());
 
@@ -245,6 +264,9 @@ export async function buildProductsView(prisma: PrismaClient) {
       portfolioName: p.portfolio?.name ?? null,
       projectCount: p.projects.length,
       provenance: (await provenanceOf(prisma, { type: "product", id: p.id })).state,
+      // Fields the core `segment` filter/sort consumes on the Products dashboard.
+      hasParent: p.portfolioId != null,
+      updatedAt: p.updatedAt.toISOString(),
     })),
   );
   return { products };

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Tag, Eyebrow } from "./primitives.js";
 import { EntityFormDisclosure } from "./entity-form-disclosure.js";
 import { DeleteButton } from "./delete-dialog.js";
+import { DashboardFilters, type FilterableRow } from "./dashboard-filters.js";
 import type { ManageOptions } from "@/server/ppm/manage-view.js";
 import type { getProductsView, getProductView } from "@/server/view-models";
 
@@ -21,6 +22,67 @@ function ProvenanceTag({ state }: { state: string }) {
 }
 
 export function Products({ view, options }: { view: ProductsViewModel; options: ManageOptions }) {
+  const rows: FilterableRow[] = view.products.map((p) => ({
+    provenance: p.provenance,
+    hasParent: p.hasParent,
+    name: p.name,
+    status: p.status,
+    updatedAt: p.updatedAt,
+    key: p.id,
+    node: (
+      <div className="card" style={{ padding: 18 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 12,
+          }}
+        >
+          <Link href={`/products/${p.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+            <div className="h2">{p.name}</div>
+          </Link>
+          <ProvenanceTag state={p.provenance} />
+        </div>
+
+        <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
+          <div>
+            <Eyebrow>Portfolio</Eyebrow>
+            <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+              {p.portfolioName ? (
+                <Link href="/portfolio" style={{ color: "var(--teal)", textDecoration: "none" }}>
+                  {p.portfolioName}
+                </Link>
+              ) : (
+                <span className="sub">Standalone</span>
+              )}
+            </div>
+          </div>
+          <div>
+            <Eyebrow>Status</Eyebrow>
+            <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{p.status}</div>
+          </div>
+          <div>
+            <Eyebrow>Delivering projects</Eyebrow>
+            <div className="kpi" style={{ fontSize: 19 }}>
+              {p.projectCount}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <EntityFormDisclosure
+            type="product"
+            options={options}
+            label="Edit"
+            initial={{ id: p.id, name: p.name, status: p.status, portfolioId: p.portfolioId, vision: p.vision }}
+          />
+          <DeleteButton parent={{ type: "product", id: p.id }} label="Delete" />
+        </div>
+      </div>
+    ),
+  }));
+
   return (
     <div className="view">
       <div className="h1">Products</div>
@@ -32,60 +94,7 @@ export function Products({ view, options }: { view: ProductsViewModel; options: 
         <EntityFormDisclosure type="product" options={options} label="＋ New product" openLabel="Cancel" />
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        {view.products.map((p) => (
-          <div key={p.id} className="card" style={{ padding: 18 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <Link href={`/products/${p.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                <div className="h2">{p.name}</div>
-              </Link>
-              <ProvenanceTag state={p.provenance} />
-            </div>
-
-            <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
-              <div>
-                <Eyebrow>Portfolio</Eyebrow>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                  {p.portfolioName ? (
-                    <Link href="/portfolio" style={{ color: "var(--teal)", textDecoration: "none" }}>
-                      {p.portfolioName}
-                    </Link>
-                  ) : (
-                    <span className="sub">Standalone</span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <Eyebrow>Status</Eyebrow>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{p.status}</div>
-              </div>
-              <div>
-                <Eyebrow>Delivering projects</Eyebrow>
-                <div className="kpi" style={{ fontSize: 19 }}>
-                  {p.projectCount}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <EntityFormDisclosure
-                type="product"
-                options={options}
-                label="Edit"
-                initial={{ id: p.id, name: p.name, status: p.status, portfolioId: p.portfolioId, vision: p.vision }}
-              />
-              <DeleteButton parent={{ type: "product", id: p.id }} label="Delete" />
-            </div>
-          </div>
-        ))}
-      </div>
+      <DashboardFilters rows={rows} containerClassName="grid" containerStyle={{ gridTemplateColumns: "1fr 1fr" }} />
     </div>
   );
 }

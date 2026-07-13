@@ -3,6 +3,7 @@ import { Panel, Kpi, Bars, HealthDot } from "./primitives.js";
 import { healthColor } from "./format.js";
 import { EntityFormDisclosure } from "./entity-form-disclosure.js";
 import { DeleteButton } from "./delete-dialog.js";
+import { DashboardFilters, ProvenanceBadge, type FilterableRow } from "./dashboard-filters.js";
 import type { ManageOptions } from "@/server/ppm/manage-view.js";
 import type { getPortfolioView } from "@/server/view-models";
 
@@ -23,6 +24,35 @@ export function Portfolio({ view, options }: { view: PortfolioViewModel; options
   const wfHeight = 12 + waterfall.length * 34 + 8;
 
   const alignmentMax = Math.max(50, ...view.objectives.map((o) => o.weightPct));
+
+  // The health matrix is a filterable/sortable list of the portfolio's programs (provenance/sort).
+  const programRows: FilterableRow[] = view.programs.map((p) => ({
+    provenance: p.provenance,
+    hasParent: p.hasParent,
+    name: p.name,
+    status: p.status,
+    health: p.health,
+    updatedAt: p.updatedAt,
+    key: p.id,
+    node: (
+      <Link href="/programs" style={{ textDecoration: "none", color: "inherit" }}>
+        <div
+          className="row"
+          style={{ display: "flex", alignItems: "center", gap: 12, padding: 8, borderRadius: 8, cursor: "pointer" }}
+        >
+          <div style={{ width: 120, fontWeight: 600, fontSize: 13 }}>{p.name}</div>
+          <ProvenanceBadge state={p.provenance} />
+          <div style={{ flex: 1 }}>
+            <Bars value={p.health} max={100} color={healthColor(p.health)} />
+          </div>
+          <div className="mono" style={{ width: 40, textAlign: "right" }}>
+            {p.health}
+          </div>
+          <HealthDot health={p.health} />
+        </div>
+      </Link>
+    ),
+  }));
 
   return (
     <div className="view">
@@ -55,25 +85,11 @@ export function Portfolio({ view, options }: { view: PortfolioViewModel; options
 
       <div className="grid" style={{ gridTemplateColumns: "1.3fr 1fr" }}>
         <Panel title="Portfolio health matrix" sub="explainable · click to decompose">
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {view.programs.map((p) => (
-              <Link key={p.id} href="/programs" style={{ textDecoration: "none", color: "inherit" }}>
-                <div
-                  className="row"
-                  style={{ display: "flex", alignItems: "center", gap: 12, padding: 8, borderRadius: 8, cursor: "pointer" }}
-                >
-                  <div style={{ width: 120, fontWeight: 600, fontSize: 13 }}>{p.name}</div>
-                  <div style={{ flex: 1 }}>
-                    <Bars value={p.health} max={100} color={healthColor(p.health)} />
-                  </div>
-                  <div className="mono" style={{ width: 40, textAlign: "right" }}>
-                    {p.health}
-                  </div>
-                  <HealthDot health={p.health} />
-                </div>
-              </Link>
-            ))}
-          </div>
+          <DashboardFilters
+            rows={programRows}
+            containerStyle={{ display: "flex", flexDirection: "column", gap: 12 }}
+            emptyLabel="No programs match these filters."
+          />
         </Panel>
 
         <Panel title="Investment vs benefit" sub="waterfall">
