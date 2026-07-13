@@ -79,7 +79,7 @@ export function Products({ view, options }: { view: ProductsViewModel; options: 
                 type="product"
                 options={options}
                 label="Edit"
-                initial={{ id: p.id, name: p.name, status: p.status, portfolioId: p.portfolioId }}
+                initial={{ id: p.id, name: p.name, status: p.status, portfolioId: p.portfolioId, vision: p.vision }}
               />
               <DeleteButton parent={{ type: "product", id: p.id }} label="Delete" />
             </div>

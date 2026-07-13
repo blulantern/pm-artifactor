@@ -240,6 +240,7 @@ export async function buildProductsView(prisma: PrismaClient) {
       id: p.id,
       name: p.name,
       status: p.status,
+      vision: p.vision,
       portfolioId: p.portfolioId,
       portfolioName: p.portfolio?.name ?? null,
       projectCount: p.projects.length,

@@ -7,10 +7,18 @@ test("products view lists standalone + portfolio-owned with project counts", asy
   try {
     const org = await prisma.organization.create({ data: { name: "WS" } });
     const method = await prisma.methodology.create({ data: { key: "SCRUM", name: "Scrum", family: "agile" } });
-    const product = await prisma.product.create({ data: { organizationId: org.id, name: "Prod" } });
+    const product = await prisma.product.create({
+      data: { organizationId: org.id, name: "Prod", vision: "Single source of truth" },
+    });
     await prisma.project.create({ data: { organizationId: org.id, name: "Pj", methodologyId: method.id, productId: product.id } });
     const view = await buildProductsView(prisma);
-    expect(view.products[0]).toMatchObject({ name: "Prod", portfolioName: null, projectCount: 1, provenance: "manual" });
+    expect(view.products[0]).toMatchObject({
+      name: "Prod",
+      vision: "Single source of truth",
+      portfolioName: null,
+      projectCount: 1,
+      provenance: "manual",
+    });
   } finally {
     await cleanup();
   }
