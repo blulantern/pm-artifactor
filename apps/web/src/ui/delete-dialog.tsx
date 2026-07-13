@@ -21,6 +21,7 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [children, setChildren] = useState<Child[] | null>(null);
   const [dispositions, setDispositions] = useState<Record<string, Disposition>>({});
   const [pending, startTransition] = useTransition();
@@ -28,6 +29,7 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
   function openDialog() {
     setOpen(true);
     setLoading(true);
+    setError(false);
     setChildren(null);
     setDispositions({});
     listChildren(parent)
@@ -35,11 +37,13 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
         setChildren(kids);
         setDispositions(Object.fromEntries(kids.map((k) => [k.ref.id, "keep" as Disposition])));
       })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }
 
   function close() {
     setOpen(false);
+    setError(false);
     setChildren(null);
     setDispositions({});
   }
@@ -49,7 +53,8 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
   }
 
   function onConfirm() {
-    const choices: ChildChoice[] = (children ?? []).map((child) => ({
+    if (error || children === null) return;
+    const choices: ChildChoice[] = children.map((child) => ({
       ref: child.ref,
       disposition: dispositions[child.ref.id] ?? "keep",
     }));
@@ -62,7 +67,7 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
 
   return (
     <>
-      <button className="ghost" onClick={openDialog}>
+      <button type="button" className="ghost" onClick={openDialog}>
         {label}
       </button>
       {open ? (
@@ -99,6 +104,8 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
             <div style={{ padding: 20 }}>
               {loading ? (
                 <div className="sub">Loading children…</div>
+              ) : error ? (
+                <div className="sub">Couldn't load children — try again.</div>
               ) : children && children.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div className="sub" style={{ fontSize: 12, marginBottom: 2 }}>
@@ -156,9 +163,9 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
                     );
                   })}
                 </div>
-              ) : (
+              ) : children !== null ? (
                 <div className="sub">This {parent.type} has no children.</div>
-              )}
+              ) : null}
             </div>
 
             <div
@@ -173,7 +180,7 @@ export function DeleteButton({ parent, label }: { parent: EntityRef; label: stri
               <button className="ghost" onClick={close} disabled={pending}>
                 Cancel
               </button>
-              <button className="btn" onClick={onConfirm} disabled={loading || pending}>
+              <button className="btn" onClick={onConfirm} disabled={loading || pending || error || children === null}>
                 {pending ? "Archiving…" : "Archive"}
               </button>
             </div>
