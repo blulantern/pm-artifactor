@@ -43,14 +43,14 @@ export async function childrenOf(prisma: PrismaClient, ref: EntityRef): Promise<
   return out;
 }
 
-// Parent FK columns that actually exist on each spine model (portfolio has none; program/product
-// carry only portfolioId; project carries all three). Nulling a key the model doesn't declare
-// makes Prisma reject the whole update, so detach must scope to the model's real FK columns.
-const PARENT_FKS: Record<SpineType, string[]> = {
-  portfolio: [],
-  program: ["portfolioId"],
-  product: ["portfolioId"],
-  project: ["portfolioId", "programId", "productId"],
+// The single FK column on a child that points at a given parent type. Detach must null only the
+// FK pointing at the parent being deleted, not every parent FK the child happens to declare —
+// otherwise a kept child gets silently unlinked from unrelated parents it's still connected to.
+const PARENT_FK_FOR: Record<SpineType, string | null> = {
+  portfolio: "portfolioId",
+  program: "programId",
+  product: "productId",
+  project: null,
 };
 
 export async function applyDeleteResolution(prisma: PrismaClient, resolution: DeleteResolution): Promise<void> {
@@ -58,10 +58,12 @@ export async function applyDeleteResolution(prisma: PrismaClient, resolution: De
     for (const ref of resolution.archive) {
       await delegate(tx as unknown as PrismaClient, ref.type).update({ where: { id: ref.id }, data: { archivedAt: new Date() } });
     }
-    for (const ref of resolution.detach) {
-      // detach a kept child: null whichever parent FK(s) this model actually has
-      const data: Record<string, unknown> = Object.fromEntries(PARENT_FKS[ref.type].map((k) => [k, null]));
-      await delegate(tx as unknown as PrismaClient, ref.type).update({ where: { id: ref.id }, data });
+    const parent = resolution.archive[0]; // resolveDelete puts the parent first
+    const fk = parent ? PARENT_FK_FOR[parent.type] : null;
+    if (fk) {
+      for (const ref of resolution.detach) {
+        await delegate(tx as unknown as PrismaClient, ref.type).update({ where: { id: ref.id }, data: { [fk]: null } });
+      }
     }
   });
 }
