@@ -14,7 +14,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      {/* suppressHydrationWarning: browser extensions (e.g. ColorZilla's cz-shortcut-listen)
+          inject attributes onto <body> before React hydrates; this is scoped to <body> only. */}
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
