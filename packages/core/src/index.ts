@@ -34,5 +34,7 @@ export * from "./ports/event-bus.js";
 export * from "./ports/integration-ports.js";
 export * from "./ports/ai-port.js";
 export * from "./ports/system-ports.js";
+export * from "./ports/session-port.js";
+export * from "./ports/credential-store-port.js";
 export * from "./testing/in-memory-work-item-repository.js";
 export * from "./testing/in-process-event-bus.js";
