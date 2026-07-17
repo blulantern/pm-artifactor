@@ -1,0 +1,93 @@
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import type { SessionPort, SessionStatus, CredentialStorePort } from "@pma/core";
+import { VaultLockedError } from "@pma/core";
+import { newKdf, deriveKey, encrypt, decrypt, makeVerifier, checkVerifier, type Kdf } from "./crypto.js";
+
+interface VaultFile {
+  v: 1;
+  kdf: Kdf;
+  verifier: string; // encrypted VERIFIER_PLAINTEXT
+  secrets: string; // encrypted JSON map { name: value }
+}
+
+function vaultPath(): string {
+  return process.env.PMA_VAULT_PATH ?? join(process.cwd(), ".pma", "vault.enc");
+}
+function readVault(): VaultFile | null {
+  const p = vaultPath();
+  if (!existsSync(p)) return null;
+  return JSON.parse(readFileSync(p, "utf8")) as VaultFile;
+}
+function writeVault(f: VaultFile): void {
+  const p = vaultPath();
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(f), { mode: 0o600 });
+}
+
+// Process-level unlocked state — correct for local single-user (a multi-user server swaps this for a per-session store).
+let key: Buffer | null = null;
+let secrets: Record<string, string> | null = null;
+
+export const vaultSession: SessionPort = {
+  async status(): Promise<SessionStatus> {
+    if (!readVault()) return "unconfigured";
+    return key && secrets ? "unlocked" : "locked";
+  },
+  async configure(passphrase: string): Promise<void> {
+    if (readVault()) throw new Error("vault already configured");
+    const kdf = newKdf();
+    const k = deriveKey(passphrase, kdf);
+    writeVault({ v: 1, kdf, verifier: makeVerifier(k), secrets: encrypt(k, JSON.stringify({})) });
+    key = k;
+    secrets = {};
+  },
+  async unlock(passphrase: string): Promise<boolean> {
+    const f = readVault();
+    if (!f) throw new Error("vault not configured");
+    const k = deriveKey(passphrase, f.kdf);
+    if (!checkVerifier(k, f.verifier)) return false;
+    key = k;
+    secrets = JSON.parse(decrypt(k, f.secrets)) as Record<string, string>;
+    return true;
+  },
+  async lock(): Promise<void> {
+    key = null;
+    secrets = null;
+  },
+};
+
+function requireUnlocked(): { k: Buffer; s: Record<string, string> } {
+  if (!key || !secrets) throw new VaultLockedError();
+  return { k: key, s: secrets };
+}
+function persist(k: Buffer, s: Record<string, string>): void {
+  const f = readVault();
+  if (!f) throw new Error("vault not configured");
+  writeVault({ ...f, secrets: encrypt(k, JSON.stringify(s)) });
+}
+
+export const credentialStore: CredentialStorePort = {
+  async get(name: string): Promise<string | null> {
+    const { s } = requireUnlocked();
+    return s[name] ?? null;
+  },
+  async set(name: string, value: string): Promise<void> {
+    const { k, s } = requireUnlocked();
+    s[name] = value;
+    persist(k, s);
+  },
+  async has(name: string): Promise<boolean> {
+    const { s } = requireUnlocked();
+    return Object.prototype.hasOwnProperty.call(s, name);
+  },
+  async remove(name: string): Promise<void> {
+    const { k, s } = requireUnlocked();
+    delete s[name];
+    persist(k, s);
+  },
+  async names(): Promise<string[]> {
+    const { s } = requireUnlocked();
+    return Object.keys(s);
+  },
+};
