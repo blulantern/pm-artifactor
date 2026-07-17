@@ -25,41 +25,48 @@ function writeVault(f: VaultFile): void {
   writeFileSync(p, JSON.stringify(f), { mode: 0o600 });
 }
 
-// Process-level unlocked state — correct for local single-user (a multi-user server swaps this for a per-session store).
-let key: Buffer | null = null;
-let secrets: Record<string, string> | null = null;
+// Process-level unlocked state — correct for local single-user (a multi-user server swaps this for
+// a per-session store). Next compiles server actions and server components into separate module
+// layers, so a module-level singleton is instantiated more than once per process. Hold the
+// unlocked state on globalThis so every layer shares one vault session.
+interface VaultState {
+  key: Buffer | null;
+  secrets: Record<string, string> | null;
+}
+const globalRef = globalThis as typeof globalThis & { __pmaVaultState?: VaultState };
+const state: VaultState = (globalRef.__pmaVaultState ??= { key: null, secrets: null });
 
 export const vaultSession: SessionPort = {
   async status(): Promise<SessionStatus> {
     if (!readVault()) return "unconfigured";
-    return key && secrets ? "unlocked" : "locked";
+    return state.key && state.secrets ? "unlocked" : "locked";
   },
   async configure(passphrase: string): Promise<void> {
     if (readVault()) throw new Error("vault already configured");
     const kdf = newKdf();
     const k = deriveKey(passphrase, kdf);
     writeVault({ v: 1, kdf, verifier: makeVerifier(k), secrets: encrypt(k, JSON.stringify({})) });
-    key = k;
-    secrets = {};
+    state.key = k;
+    state.secrets = {};
   },
   async unlock(passphrase: string): Promise<boolean> {
     const f = readVault();
     if (!f) throw new Error("vault not configured");
     const k = deriveKey(passphrase, f.kdf);
     if (!checkVerifier(k, f.verifier)) return false;
-    key = k;
-    secrets = JSON.parse(decrypt(k, f.secrets)) as Record<string, string>;
+    state.key = k;
+    state.secrets = JSON.parse(decrypt(k, f.secrets)) as Record<string, string>;
     return true;
   },
   async lock(): Promise<void> {
-    key = null;
-    secrets = null;
+    state.key = null;
+    state.secrets = null;
   },
 };
 
 function requireUnlocked(): { k: Buffer; s: Record<string, string> } {
-  if (!key || !secrets) throw new VaultLockedError();
-  return { k: key, s: secrets };
+  if (!state.key || !state.secrets) throw new VaultLockedError();
+  return { k: state.key, s: state.secrets };
 }
 function persist(k: Buffer, s: Record<string, string>): void {
   const f = readVault();

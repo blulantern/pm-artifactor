@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -55,4 +55,12 @@ test("the on-disk file contains only ciphertext, never the secret value", async 
   const bytes = readFileSync(process.env.PMA_VAULT_PATH as string, "utf8");
   expect(bytes).not.toContain("super-secret-token");
   expect(bytes).not.toContain("correct-horse");
+});
+
+test("unlocked state is shared across module instances (Next compiles actions and RSC in separate layers)", async () => {
+  await vaultSession.configure("correct-horse");
+  expect(await vaultSession.status()).toBe("unlocked");
+  vi.resetModules(); // simulate Next instantiating the module a second time
+  const fresh = await import("./vault-store.js");
+  expect(await fresh.vaultSession.status()).toBe("unlocked"); // was "locked" before the fix
 });
