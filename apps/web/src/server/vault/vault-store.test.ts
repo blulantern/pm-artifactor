@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { vaultSession, credentialStore } from "./vault-store.js";
@@ -55,6 +55,15 @@ test("the on-disk file contains only ciphertext, never the secret value", async 
   const bytes = readFileSync(process.env.PMA_VAULT_PATH as string, "utf8");
   expect(bytes).not.toContain("super-secret-token");
   expect(bytes).not.toContain("correct-horse");
+});
+
+test("writes are atomic — no .tmp file is left behind, and the vault stays parseable", async () => {
+  const p = process.env.PMA_VAULT_PATH as string;
+  await vaultSession.configure("correct-horse");
+  await credentialStore.set("jira", "token");
+  await credentialStore.remove("jira");
+  expect(existsSync(`${p}.tmp`)).toBe(false);
+  expect(() => JSON.parse(readFileSync(p, "utf8"))).not.toThrow();
 });
 
 test("unlocked state is shared across module instances (Next compiles actions and RSC in separate layers)", async () => {

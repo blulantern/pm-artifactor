@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { SessionPort, SessionStatus, CredentialStorePort } from "@pma/core";
 import { VaultLockedError } from "@pma/core";
@@ -22,7 +22,13 @@ function readVault(): VaultFile | null {
 function writeVault(f: VaultFile): void {
   const p = vaultPath();
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(f), { mode: 0o600 });
+  // Write-then-rename: a crash mid-write must not leave a truncated vault. The file holds every
+  // credential and there is no recovery path, and status() parses it on every request — so a
+  // partial write would take down /unlock and /vault/setup too. The tmp file is 0600 as well, so
+  // the ciphertext is never briefly world-readable.
+  const tmp = `${p}.tmp`;
+  writeFileSync(tmp, JSON.stringify(f), { mode: 0o600 });
+  renameSync(tmp, p);
 }
 
 // Process-level unlocked state — correct for local single-user (a multi-user server swaps this for
@@ -59,6 +65,7 @@ export const vaultSession: SessionPort = {
     return true;
   },
   async lock(): Promise<void> {
+    state.key?.fill(0);
     state.key = null;
     state.secrets = null;
   },
