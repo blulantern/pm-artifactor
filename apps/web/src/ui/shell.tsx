@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
+import { vaultSession } from "@/server/vault/vault-store";
+import { LockControl } from "@/ui/lock-control";
 
 type NavItem = { v: string; ic: string; l: string; href: string; tag?: string };
 
@@ -82,7 +85,7 @@ function NavGroup({ head, items, active }: { head: string; items: NavItem[]; act
   );
 }
 
-export function Shell({
+export async function Shell({
   active,
   crumb,
   children,
@@ -91,6 +94,9 @@ export function Shell({
   crumb: ReactNode;
   children: ReactNode;
 }) {
+  const status = await vaultSession.status();
+  if (status === "locked") redirect("/unlock");
+
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <div
@@ -146,6 +152,26 @@ export function Shell({
           <div className="mono" style={{ fontSize: 9.5, color: "#7fb5ad", marginTop: 3, paddingLeft: 15 }}>
             ~/PM-Vault · 4.1 MB
           </div>
+          {status === "unlocked" ? (
+            <div style={{ marginTop: 10 }}>
+              <LockControl />
+            </div>
+          ) : null}
+          {status === "unconfigured" ? (
+            <Link
+              href="/vault/setup"
+              style={{
+                display: "block",
+                marginTop: 10,
+                fontSize: 11,
+                color: "#e8c46a",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              🔒 Secure this vault
+            </Link>
+          ) : null}
         </div>
       </div>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
