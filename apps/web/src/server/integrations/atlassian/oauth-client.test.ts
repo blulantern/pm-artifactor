@@ -71,6 +71,13 @@ describe("exchangeCode", () => {
     const [url] = (fetchImpl.mock.calls[0] as unknown) as [string];
     expect(url).not.toContain("top-secret");
   });
+
+  it("carries the OAuth error code on a rejected token request", async () => {
+    const fetchImpl = vi.fn(async () => jsonRes({ error: "invalid_grant" }, false, 400));
+    await expect(
+      exchangeCode({ clientId: "cid", clientSecret: "csec", code: "bad" }, deps(fetchImpl as unknown as typeof fetch)),
+    ).rejects.toMatchObject({ oauthError: "invalid_grant", status: 400 });
+  });
 });
 
 describe("refreshTokens", () => {

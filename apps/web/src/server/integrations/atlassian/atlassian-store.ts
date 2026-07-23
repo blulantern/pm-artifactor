@@ -11,7 +11,7 @@
  */
 import { isExpired } from "@pma/core";
 import { credentialStore } from "@/server/vault/vault-store";
-import { refreshTokens, type OAuthDeps, type AccessibleSite } from "./oauth-client.js";
+import { refreshTokens, AtlassianOAuthError, type OAuthDeps, type AccessibleSite } from "./oauth-client.js";
 
 const CLIENT_KEY = "atlassian:client";
 const PENDING_KEY = "atlassian:pending";
@@ -116,9 +116,14 @@ async function doRefresh(conn: StoredConnection, deps: OAuthDeps): Promise<Store
       { clientId: creds.clientId, clientSecret: creds.clientSecret, refresh: conn.refresh },
       deps,
     );
-  } catch {
-    await writeConnection({ ...conn, reconsentRequired: true });
-    throw new NeedsReconsentError(conn.cloudId);
+  } catch (err) {
+    // Only a dead/rotated refresh token is terminal — re-consent is the sole recovery.
+    // Transient failures (5xx, network, malformed body) leave the token valid: re-throw so a later call retries.
+    if (err instanceof AtlassianOAuthError && err.oauthError === "invalid_grant") {
+      await writeConnection({ ...conn, reconsentRequired: true });
+      throw new NeedsReconsentError(conn.cloudId);
+    }
+    throw err;
   }
   const updated: StoredConnection = {
     ...conn,

@@ -130,6 +130,26 @@ test("a rejected refresh flags needs_reconsent and does not retry", async () => 
   expect(fetchImpl).toHaveBeenCalledTimes(1);
 });
 
+test("a transient refresh failure does NOT flag reconsent — the token stays valid and a retry succeeds", async () => {
+  await writeClientCreds({ clientId: "cid", clientSecret: "csec" });
+  await writeConnection(conn({ expiresAt: NOW - 1 }));
+  // First attempt: a 503 with no invalid_grant — transient.
+  const fetchImpl = vi
+    .fn()
+    .mockImplementationOnce(async () => jsonRes({ error: "temporarily_unavailable" }, false, 503))
+    .mockImplementationOnce(async () =>
+      jsonRes({ access_token: "at-2", refresh_token: "rt-2", expires_in: 3600, scope: "" }),
+    );
+  const deps = { fetchImpl: fetchImpl as unknown as typeof fetch, now: () => NOW };
+  // The transient failure propagates, but must NOT mark the connection dead.
+  await expect(accessTokenFor("cloud-1", deps)).rejects.not.toBeInstanceOf(NeedsReconsentError);
+  expect((await readConnection("cloud-1"))?.reconsentRequired).toBeUndefined();
+  // The refresh token was never consumed, so the next use retries and succeeds.
+  const token = await accessTokenFor("cloud-1", deps);
+  expect(token).toBe("at-2");
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+});
+
 test("a locked vault refuses to hand out tokens", async () => {
   await writeClientCreds({ clientId: "cid", clientSecret: "csec" });
   await writeConnection(conn());

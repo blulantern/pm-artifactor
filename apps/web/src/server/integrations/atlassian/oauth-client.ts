@@ -50,6 +50,8 @@ export class AtlassianOAuthError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    /** The OAuth2 `error` code from the response body (e.g. "invalid_grant"), when present. */
+    readonly oauthError?: string,
   ) {
     super(message);
     this.name = "AtlassianOAuthError";
@@ -84,7 +86,15 @@ async function postToken(body: Record<string, string>, deps: OAuthDeps): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new AtlassianOAuthError(`atlassian token request failed (${res.status})`, res.status);
+  if (!res.ok) {
+    let oauthError: string | undefined;
+    try {
+      oauthError = ((await res.json()) as { error?: string })?.error;
+    } catch {
+      // Non-JSON error body (e.g. a 5xx HTML page) — leave oauthError undefined; treated as transient.
+    }
+    throw new AtlassianOAuthError(`atlassian token request failed (${res.status})`, res.status, oauthError);
+  }
   const j = (await res.json()) as TokenResponse;
   if (!j.access_token || !j.refresh_token) {
     throw new AtlassianOAuthError("atlassian token response missing access or refresh token");
