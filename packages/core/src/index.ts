@@ -29,6 +29,7 @@ export * from "./domain/prioritization/rice-strategy.js";
 export * from "./domain/provenance/disposition.js";
 export * from "./domain/provenance/override.js";
 export * from "./domain/provenance/segment.js";
+export * from "./domain/integrations/connection-state.js";
 export * from "./ports/repository.js";
 export * from "./ports/event-bus.js";
 export * from "./ports/integration-ports.js";

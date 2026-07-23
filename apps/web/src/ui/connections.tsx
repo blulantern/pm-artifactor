@@ -1,5 +1,7 @@
 import { timeAgo } from "./format.js";
 import type { getConnectionsView } from "@/server/view-models";
+import { AtlassianCard } from "./atlassian-card.js";
+import type { AtlassianView } from "@/server/view-models";
 
 type ConnectionsViewModel = Awaited<ReturnType<typeof getConnectionsView>>;
 
@@ -64,7 +66,15 @@ function SourceCard({ label, kind, system }: { label: string; kind: string; syst
   );
 }
 
-export function Connections({ view }: { view: ConnectionsViewModel }) {
+export function Connections({
+  view,
+  atlassian,
+  notice,
+}: {
+  view: ConnectionsViewModel;
+  atlassian: AtlassianView;
+  notice?: string;
+}) {
   const byVendor = new Map(view.map((s) => [s.vendor.toLowerCase(), s]));
   const catalogVendors = new Set(CATALOG.map((c) => c.vendor));
   const extras = view.filter((s) => !catalogVendors.has(s.vendor.toLowerCase()));
@@ -76,6 +86,7 @@ export function Connections({ view }: { view: ConnectionsViewModel }) {
         Your own accounts, read-only. Pulled to enrich the canonical model — nothing is written back, nothing leaves
         this device.
       </div>
+      <AtlassianCard view={atlassian} notice={notice} />
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         {CATALOG.map((c) => (
           <SourceCard key={c.vendor} label={c.label} kind={c.kind} system={byVendor.get(c.vendor) ?? null} />

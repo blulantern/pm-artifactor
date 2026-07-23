@@ -8,14 +8,20 @@ import {
   buildDailyBrief,
   WsjfStrategy,
   RiceStrategy,
+  connectionState,
   type PriorityScore,
   type PersonLoad,
   type HealthDriverInput,
   type CanonicalSnapshot,
   type SuggestedAction,
+  type ConnectionState,
+  type SessionStatus,
 } from "@pma/core";
 import { db } from "./db.js";
 import { provenanceOf } from "./ppm/entity-links.js";
+import { vaultSession } from "./vault/vault-store.js";
+import { listConnections, hasClientCreds, readPending } from "./integrations/atlassian/atlassian-store.js";
+import type { AccessibleSite } from "./integrations/atlassian/oauth-client.js";
 
 const NOW = () => new Date();
 
@@ -653,4 +659,35 @@ function safeJsonParse(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+// ============================== Atlassian connection ==============================
+
+export interface AtlassianView {
+  vaultStatus: SessionStatus;
+  hasClient: boolean;
+  connections: { cloudId: string; siteName: string; siteUrl: string; state: ConnectionState }[];
+  /** Sites awaiting a pick, when one grant reaches several sites. */
+  pendingSites: AccessibleSite[];
+}
+
+/** Presence and state only — token values never reach the browser. */
+export async function getAtlassianView(): Promise<AtlassianView> {
+  const vaultStatus = await vaultSession.status();
+  if (vaultStatus !== "unlocked") {
+    return { vaultStatus, hasClient: false, connections: [], pendingSites: [] };
+  }
+  const now = Date.now();
+  const stored = await listConnections();
+  return {
+    vaultStatus,
+    hasClient: await hasClientCreds(),
+    connections: stored.map((c) => ({
+      cloudId: c.cloudId,
+      siteName: c.siteName,
+      siteUrl: c.siteUrl,
+      state: connectionState({ expiresAt: c.expiresAt, hasRefresh: Boolean(c.refresh), reconsentRequired: c.reconsentRequired }, now),
+    })),
+    pendingSites: (await readPending())?.sites ?? [],
+  };
 }

@@ -73,3 +73,42 @@ test("team view keys capacity by person id — two same-named people do not merg
     expect(rows.map((r) => r.totalPct).sort((x, y) => x - y)).toEqual([40, 90]);
   } finally { await cleanup(); }
 }, 30000);
+
+test("atlassian view reports state and presence — never a token value", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { vaultSession } = await import("./vault/vault-store.js");
+  const { writeClientCreds, writeConnection } = await import("./integrations/atlassian/atlassian-store.js");
+  const { getAtlassianView } = await import("./view-models.js");
+
+  const dir = mkdtempSync(join(tmpdir(), "pma-view-"));
+  process.env.PMA_VAULT_PATH = join(dir, "vault.enc");
+  try {
+    await vaultSession.lock();
+    await vaultSession.configure("correct-horse");
+    await writeClientCreds({ clientId: "cid", clientSecret: "csec" });
+    await writeConnection({
+      cloudId: "cloud-1",
+      siteUrl: "https://blulantern.atlassian.net",
+      siteName: "blulantern",
+      access: "at-1",
+      refresh: "rt-1",
+      expiresAt: Date.now() + 3_600_000,
+      scopes: ["read:jira-work"],
+    });
+
+    const view = await getAtlassianView();
+    expect(view.hasClient).toBe(true);
+    expect(view.vaultStatus).toBe("unlocked");
+    expect(view.connections).toEqual([
+      { cloudId: "cloud-1", siteName: "blulantern", siteUrl: "https://blulantern.atlassian.net", state: "connected" },
+    ]);
+    expect(JSON.stringify(view)).not.toContain("at-1");
+    expect(JSON.stringify(view)).not.toContain("rt-1");
+  } finally {
+    await vaultSession.lock();
+    delete process.env.PMA_VAULT_PATH;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
