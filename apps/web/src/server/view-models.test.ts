@@ -104,8 +104,10 @@ test("atlassian view reports state and presence — never a token value", async 
     expect(view.connections).toEqual([
       { cloudId: "cloud-1", siteName: "blulantern", siteUrl: "https://blulantern.atlassian.net", state: "connected" },
     ]);
+    expect(view.clientId).toBe("cid"); // the client ID is surfaced so a wrong value can be spotted
     expect(JSON.stringify(view)).not.toContain("at-1");
     expect(JSON.stringify(view)).not.toContain("rt-1");
+    expect(JSON.stringify(view)).not.toContain("csec"); // the secret is NEVER surfaced
   } finally {
     await vaultSession.lock();
     delete process.env.PMA_VAULT_PATH;

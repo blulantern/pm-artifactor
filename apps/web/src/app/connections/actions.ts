@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/server/db";
 import { vaultSession } from "@/server/vault/vault-store";
-import { writeClientCreds } from "@/server/integrations/atlassian/atlassian-store";
+import { writeClientCreds, removeClientCreds } from "@/server/integrations/atlassian/atlassian-store";
 import { beginConnect, chooseSite, disconnect } from "@/server/integrations/atlassian/connect-service";
 
 /**
@@ -22,6 +22,17 @@ export async function saveAtlassianClient(input: {
   const clientSecret = input.clientSecret.trim();
   if (!clientId || !clientSecret) return { ok: false, error: "Client ID and client secret are both required." };
   await writeClientCreds({ clientId, clientSecret });
+  revalidatePath("/connections");
+  return { ok: true };
+}
+
+/** Remove the stored client ID + secret from the vault. Existing site connections keep their
+ * tokens, but can no longer refresh until credentials are re-added. */
+export async function clearAtlassianClient(): Promise<{ ok: boolean; error?: string }> {
+  if ((await vaultSession.status()) !== "unlocked") {
+    return { ok: false, error: "Unlock the vault before clearing Atlassian credentials." };
+  }
+  await removeClientCreds();
   revalidatePath("/connections");
   return { ok: true };
 }

@@ -20,7 +20,7 @@ import {
 import { db } from "./db.js";
 import { provenanceOf } from "./ppm/entity-links.js";
 import { vaultSession } from "./vault/vault-store.js";
-import { listConnections, hasClientCreds, readPending } from "./integrations/atlassian/atlassian-store.js";
+import { listConnections, readClientCreds, readPending } from "./integrations/atlassian/atlassian-store.js";
 import type { AccessibleSite } from "./integrations/atlassian/oauth-client.js";
 
 const NOW = () => new Date();
@@ -666,6 +666,9 @@ function safeJsonParse(text: string): unknown {
 export interface AtlassianView {
   vaultStatus: SessionStatus;
   hasClient: boolean;
+  /** The stored OAuth client ID (NOT a secret — it rides in the browser redirect). Shown so the
+   * user can verify what's on file; null when no credentials are saved. The secret is never surfaced. */
+  clientId: string | null;
   connections: { cloudId: string; siteName: string; siteUrl: string; state: ConnectionState }[];
   /** Sites awaiting a pick, when one grant reaches several sites. */
   pendingSites: AccessibleSite[];
@@ -675,13 +678,15 @@ export interface AtlassianView {
 export async function getAtlassianView(): Promise<AtlassianView> {
   const vaultStatus = await vaultSession.status();
   if (vaultStatus !== "unlocked") {
-    return { vaultStatus, hasClient: false, connections: [], pendingSites: [] };
+    return { vaultStatus, hasClient: false, clientId: null, connections: [], pendingSites: [] };
   }
   const now = Date.now();
   const stored = await listConnections();
+  const creds = await readClientCreds();
   return {
     vaultStatus,
-    hasClient: await hasClientCreds(),
+    hasClient: creds !== null,
+    clientId: creds?.clientId ?? null,
     connections: stored.map((c) => ({
       cloudId: c.cloudId,
       siteName: c.siteName,

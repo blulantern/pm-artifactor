@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/server/db", () => ({ db: () => ({}) }));
 
-import { saveAtlassianClient, startAtlassianConnect } from "./actions.js";
+import { saveAtlassianClient, startAtlassianConnect, clearAtlassianClient } from "./actions.js";
 
 let dir: string;
 
@@ -57,4 +57,26 @@ test("startAtlassianConnect redirects to Atlassian's authorize URL", async () =>
 
 test("startAtlassianConnect surfaces missing creds instead of a blank redirect", async () => {
   await expect(startAtlassianConnect()).rejects.toThrow(/REDIRECT:\/connections\?error=/);
+});
+
+test("saveAtlassianClient overwrites existing credentials — a wrong value can be corrected", async () => {
+  await saveAtlassianClient({ clientId: "wrong-id", clientSecret: "s1" });
+  await saveAtlassianClient({ clientId: "right-id", clientSecret: "s2" });
+  expect(await readClientCreds()).toEqual({ clientId: "right-id", clientSecret: "s2" });
+});
+
+test("clearAtlassianClient removes the stored credentials", async () => {
+  await saveAtlassianClient({ clientId: "cid", clientSecret: "csec" });
+  expect(await hasClientCreds()).toBe(true);
+  const r = await clearAtlassianClient();
+  expect(r.ok).toBe(true);
+  expect(await hasClientCreds()).toBe(false);
+});
+
+test("clearAtlassianClient refuses when the vault is locked", async () => {
+  await saveAtlassianClient({ clientId: "cid", clientSecret: "csec" });
+  await vaultSession.lock();
+  const r = await clearAtlassianClient();
+  expect(r.ok).toBe(false);
+  expect(r.error).toMatch(/unlock/i);
 });

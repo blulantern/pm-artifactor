@@ -67,6 +67,9 @@ export async function readClientCreds(): Promise<AtlassianClientCreds | null> {
 export async function hasClientCreds(): Promise<boolean> {
   return credentialStore.has(CLIENT_KEY);
 }
+export async function removeClientCreds(): Promise<void> {
+  await credentialStore.remove(CLIENT_KEY);
+}
 
 export async function writeConnection(c: StoredConnection): Promise<void> {
   await credentialStore.set(authRefFor(c.cloudId), JSON.stringify(c));
